@@ -565,10 +565,12 @@ name = "bendctl"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
+ "async-trait",
  "clap 3.0.0-beta.5",
  "clap_generate",
  "colored",
  "comfy-table",
+ "common-base",
  "common-building",
  "common-meta-raft-store",
  "databend-meta",
@@ -1482,6 +1484,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-metrics"
+version = "0.1.0"
+dependencies = [
+ "common-exception",
+ "common-infallible",
+ "lazy_static",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "prometheus-parse",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "common-planners"
 version = "0.1.0"
 dependencies = [
@@ -2035,6 +2051,7 @@ dependencies = [
  "common-meta-embedded",
  "common-meta-flight",
  "common-meta-types",
+ "common-metrics",
  "common-planners",
  "common-streams",
  "common-tracing",
@@ -2051,7 +2068,6 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics",
- "metrics-exporter-prometheus",
  "msql-srv",
  "mysql",
  "nom 7.0.0",
@@ -4844,6 +4860,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus-parse"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c996f3caea1c51aa034c0d2dfd8447a12c555f4567b02677ef8a865ac4cce712"
+dependencies = [
+ "chrono",
+ "lazy_static",
+ "regex",
+]
+
+[[package]]
 name = "prost"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6935,9 +6962,9 @@ checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vergen"
-version = "5.1.15"
+version = "5.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "265455aab08c55a1ab13f07c8d5e25c7d46900f4484dd7cbd682e77171f93f3c"
+checksum = "7b62d4fc8fc9c81d139c8106b9f4e583e7c1eb36e320dc28d5c03aab86729495"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
