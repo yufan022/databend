@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datavalues::chrono::NaiveDate;
+use common_datavalues::chrono::NaiveDateTime;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -207,6 +209,43 @@ impl ConstantFoldingImpl {
         *is_remove = false;
         Ok(new_expr)
     }
+
+    fn try_convert_to_date(expr: Vec<Expression>) -> Result<Vec<Expression>> {
+        let new_expr = expr
+            .iter()
+            .map(|e| match e {
+                Expression::Literal {
+                    value, data_type, ..
+                } => {
+                    if !matches!(data_type, DataType::String) {
+                        return e.clone();
+                    }
+                    const DATE_FMT: &str = "%Y-%m-%d";
+                    const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
+                    let date = NaiveDate::parse_from_str(value.to_string().as_str(), DATE_FMT);
+                    let datetime =
+                        NaiveDateTime::parse_from_str(value.to_string().as_str(), TIME_FMT);
+                    let op_function;
+                    if date.is_ok() {
+                        op_function = "toDate";
+                    } else if datetime.is_ok() {
+                        op_function = "toDateTime";
+                    } else {
+                        return e.clone();
+                    }
+                    Self::rewrite_function(
+                        op_function,
+                        vec![e.clone()],
+                        e.column_name(),
+                        Expression::create_scalar_function,
+                    )
+                    .unwrap()
+                }
+                _ => e.clone(),
+            })
+            .collect::<Vec<Expression>>();
+        Ok(new_expr)
+    }
 }
 
 impl PlanRewriter for ConstantFoldingImpl {
@@ -252,7 +291,7 @@ impl PlanRewriter for ConstantFoldingImpl {
                     let new_right = self.rewrite_expr(schema, right)?;
 
                     let origin_name = origin.column_name();
-                    let new_exprs = vec![new_left, new_right];
+                    let new_exprs = Self::try_convert_to_date(vec![new_left, new_right])?;
                     Self::rewrite_function(
                         op,
                         new_exprs,
