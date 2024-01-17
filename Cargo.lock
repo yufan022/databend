@@ -9073,7 +9073,7 @@ dependencies = [
 [[package]]
 name = "opendal"
 version = "0.44.1"
-source = "git+https://github.com/apache/incubator-opendal?rev=16cd2ce#16cd2ce358fa3cd3a0ca9f02e3843d74b147c591"
+source = "git+https://github.com/apache/incubator-opendal?rev=520b5cd#520b5cd82ab9216cc5453348d17bdbb73366bfcc"
 dependencies = [
  "anyhow",
  "async-trait",
