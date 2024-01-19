@@ -47,12 +47,12 @@ use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
 use opendal::layers::PrometheusClientLayer;
 use opendal::layers::RetryLayer;
-use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
 
+use super::timeout::TimeoutLayer;
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
 
