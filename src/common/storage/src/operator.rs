@@ -103,7 +103,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
             TimeoutLayer::new()
                 // Return timeout error if the operation failed to finish in
                 // 60s
-                .with_timeout(Duration::from_secs(60))
+                .with_timeout(Duration::from_secs(10))
                 // Return timeout error if the request speed is less than
                 // 1 KiB/s.
                 .with_speed(1024),
