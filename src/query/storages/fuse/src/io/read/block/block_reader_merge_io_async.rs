@@ -15,8 +15,10 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
+use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_base::base::tokio;
 use databend_common_base::rangemap::RangeMerger;
 use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_exception::ErrorCode;
@@ -28,6 +30,7 @@ use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use futures::future::try_join_all;
+use log::warn;
 use opendal::Operator;
 
 use crate::io::read::block::block_reader_merge_io::OwnerMemory;
@@ -212,7 +215,21 @@ impl BlockReader {
         start: u64,
         end: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        let chunk = op.read_with(path).range(start..end).await?;
-        Ok((index, chunk))
+        loop {
+            match tokio::time::timeout(
+                Duration::from_secs(10),
+                op.read_with(path).range(start..end),
+            )
+            .await
+            {
+                Ok(result) => return Ok(result.map(|chunk| (index, chunk))?),
+                Err(elapsed) => {
+                    warn!(
+                        "read_range of path {path} at index {index} timeout after {elapsed:?}, retrying"
+                    );
+                    continue;
+                }
+            }
+        }
     }
 }
