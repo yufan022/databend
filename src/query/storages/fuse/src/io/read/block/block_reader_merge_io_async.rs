@@ -18,8 +18,7 @@ use std::ops::Range;
 use std::time::Duration;
 use std::time::Instant;
 
-use backoff::future::retry_notify;
-use backoff::ExponentialBackoff;
+use databend_common_base::base::tokio;
 use databend_common_base::rangemap::RangeMerger;
 use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_exception::ErrorCode;
@@ -216,36 +215,48 @@ impl BlockReader {
         start: u64,
         end: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        // max elapse time 10 sec
-        let backoff = ExponentialBackoff {
-            initial_interval: Duration::from_secs(1),
-            randomization_factor: 0.5,
-            multiplier: 2f64,
-            max_elapsed_time: Some(Duration::from_secs(10)),
-            ..std::default::Default::default()
-        };
+        let begin = Instant::now();
+        let max_retries = 3;
+        let mut attempts = 0;
 
-        let chunk = retry_notify(
-            backoff,
-            || async {
-                op.read_with(path)
-                    .range(start..end)
-                    .await
-                    .map_err(|e| backoff::Error::Transient {
-                        err: e,
-                        retry_after: None,
-                    })
-            },
-            |e, dur| {
-                warn!(
-                    "read _range tmp failure {path}:{start}-{end}, Error happened at {:?}: {}",
-                    dur, e
-                );
-            },
-        )
-        .await
-        .map_err(|e| ErrorCode::from_std_error(e))?;
+        let request_timeout = Duration::from_secs(10);
+        loop {
+            match tokio::time::timeout(request_timeout, op.read_with(path).range(start..end)).await
+            {
+                Ok(Ok(chunk)) => return Ok((index, chunk)),
+                Ok(Err(e)) => {
+                    warn!(
+                        "(tmp) read range failed, elapsed {:?}, path: {}, range: {}..{}, err  {}",
+                        begin.elapsed(),
+                        path,
+                        start,
+                        end,
+                        e
+                    );
+                }
+                Err(_) => {
+                    warn!(
+                        "(tmp) read range time out, elapsed {:?}, path: {}, range: {}..{}",
+                        begin.elapsed(),
+                        path,
+                        start,
+                        end,
+                    );
+                }
+            }
 
-        Ok((index, chunk))
+            if attempts >= max_retries {
+                return Err(ErrorCode::StorageOther(format!(
+                    "read range failed, elapsed {:?}, path: {}, range: {}..{}",
+                    begin.elapsed(),
+                    path,
+                    start,
+                    end,
+                )));
+            }
+
+            tokio::time::sleep(Duration::from_secs(1 << attempts)).await;
+            attempts += 1;
+        }
     }
 }
