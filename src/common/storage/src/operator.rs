@@ -103,7 +103,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
             TimeoutLayer::new()
                 // Return timeout error if the operation failed to finish in
                 // 60s
-                .with_timeout(Duration::from_secs(60))
+                .with_timeout(Duration::from_secs(10))
                 // Return timeout error if the request speed is less than
                 // 1 KiB/s.
                 .with_speed(1024),
@@ -295,6 +295,13 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(30);
         builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
+
+        // Enable TCP keepalive if set.
+        if let Ok(v) = env::var("_DATABEND_INTERNAL_TCP_KEEPALIVE") {
+            if let Ok(v) = v.parse::<u64>() {
+                builder = builder.tcp_keepalive(Duration::from_secs(v));
+            }
+        }
 
         builder
     };
