@@ -15,8 +15,11 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
+use std::time::Duration;
 use std::time::Instant;
 
+use backoff::future::retry_notify;
+use backoff::ExponentialBackoff;
 use databend_common_base::rangemap::RangeMerger;
 use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_exception::ErrorCode;
@@ -28,6 +31,7 @@ use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use futures::future::try_join_all;
+use log::warn;
 use opendal::Operator;
 
 use crate::io::read::block::block_reader_merge_io::OwnerMemory;
@@ -212,7 +216,36 @@ impl BlockReader {
         start: u64,
         end: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        let chunk = op.read_with(path).range(start..end).await?;
+        // max elapse time 10 sec
+        let backoff = ExponentialBackoff {
+            initial_interval: Duration::from_secs(1),
+            randomization_factor: 0.5,
+            multiplier: 2f64,
+            max_elapsed_time: Some(Duration::from_secs(10)),
+            ..std::default::Default::default()
+        };
+
+        let chunk = retry_notify(
+            backoff,
+            || async {
+                op.read_with(path)
+                    .range(start..end)
+                    .await
+                    .map_err(|e| backoff::Error::Transient {
+                        err: e,
+                        retry_after: None,
+                    })
+            },
+            |e, dur| {
+                warn!(
+                    "read _range tmp failure {path}:{start}-{end}, Error happened at {:?}: {}",
+                    dur, e
+                );
+            },
+        )
+        .await
+        .map_err(|e| ErrorCode::from_std_error(e))?;
+
         Ok((index, chunk))
     }
 }
