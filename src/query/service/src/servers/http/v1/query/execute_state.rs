@@ -323,7 +323,7 @@ async fn execute(
         // duplicate codes, but there is an async call
         let data = BlockEntry::new(
             DataType::String,
-            databend_common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
+            databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
         );
         block_sender.send(DataBlock::new(vec![data], 1), 1).await;
         return Err(err);
@@ -340,9 +340,7 @@ async fn execute(
             // duplicate codes, but there is an async call
             let data = BlockEntry::new(
                 DataType::String,
-                databend_common_expression::Value::Scalar(Scalar::String(
-                    err.to_string().into_bytes(),
-                )),
+                databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
             );
             block_sender.send(DataBlock::new(vec![data], 1), 1).await;
             Executor::stop(&executor, Err(err), false).await;
@@ -361,7 +359,7 @@ async fn execute(
                         let data = BlockEntry::new(
                             DataType::String,
                             databend_common_expression::Value::Scalar(Scalar::String(
-                                err.to_string().into_bytes(),
+                                err.to_string(),
                             )),
                         );
                         block_sender.send(DataBlock::new(vec![data], 1), 1).await;
