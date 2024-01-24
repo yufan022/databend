@@ -221,7 +221,11 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+        s_expr = decorrelate_subquery(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            s_expr.clone(),
+        )?;
     }
 
     // Pull up and infer filter.
@@ -301,7 +305,11 @@ fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Me
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+        s_expr = decorrelate_subquery(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            s_expr.clone(),
+        )?;
     }
 
     // Run default rewrite rules
