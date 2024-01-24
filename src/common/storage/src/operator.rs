@@ -104,12 +104,10 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
         .layer(
             TimeoutLayer::new()
-                // Return timeout error if the operation failed to finish in
-                // 10s
+                // Return timeout error if the operation failed to finish in 10s
                 .with_timeout(Duration::from_secs(10))
-                // Return timeout error if the request speed is less than
-                // 1 KiB/s.
-                .with_speed(1024),
+                // Return timeout error if the io operation failed to finish in 5s
+                .with_io_timeout(Duration::from_secs(5)),
         )
         // Add retry
         .layer(RetryLayer::new().with_jitter())
