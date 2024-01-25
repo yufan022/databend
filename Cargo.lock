@@ -3262,21 +3262,12 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-pipeline-core",
- "databend-common-profile",
  "itertools 0.10.5",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=a0669bf)",
  "match-template",
  "rand 0.8.5",
  "serde",
  "typetag",
-]
-
-[[package]]
-name = "databend-common-profile"
-version = "0.1.0"
-dependencies = [
- "dashmap",
- "databend-common-base",
 ]
 
 [[package]]
@@ -3389,7 +3380,6 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
- "databend-common-profile",
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-storages-delta",
@@ -3857,7 +3847,6 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
- "databend-common-profile",
  "databend-common-sql",
  "databend-common-storage",
  "databend-common-storages-fuse",
@@ -4234,7 +4223,6 @@ dependencies = [
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
- "databend-common-profile",
  "databend-common-settings",
  "databend-common-sharing",
  "databend-common-sql",
