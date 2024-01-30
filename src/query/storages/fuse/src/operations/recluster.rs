@@ -66,6 +66,13 @@ impl FuseTable {
         push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
     ) -> Result<Option<ReclusterMutator>> {
+        // Status.
+        {
+            let status = "recluster: begin to run recluster";
+            ctx.set_status_info(status);
+            log::info!("{}", status);
+        }
+
         if self.cluster_key_meta.is_none() {
             return Ok(None);
         }
@@ -147,6 +154,7 @@ impl FuseTable {
                     }
 
                     if mutator.target_select(vec![compact_segment]).await? {
+                        log::info!("Number of segments scheduled for recluster: 1");
                         break 'F;
                     }
                 }
@@ -155,7 +163,13 @@ impl FuseTable {
                 selected_segs.into_iter().for_each(|i| {
                     selected_segments.push(compact_segments[i].clone());
                 });
+
+                let num_selected = selected_segments.len();
                 if mutator.target_select(selected_segments).await? {
+                    log::info!(
+                        "Number of segments scheduled for recluster: {}",
+                        num_selected
+                    );
                     break;
                 }
             }
