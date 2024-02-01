@@ -480,6 +480,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     broadcast: false,
                     is_lateral: false,
+                    original_join_type: None,
                 }
                 .into();
                 Ok((
@@ -550,6 +551,7 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     broadcast: false,
                     is_lateral: false,
+                    original_join_type: None,
                 }
                 .into();
                 let s_expr = SExpr::create_binary(
@@ -581,6 +583,7 @@ impl SubqueryRewriter {
             need_hold_hash_table: false,
             broadcast: false,
             is_lateral: false,
+            original_join_type: None,
         }
         .into();
 
