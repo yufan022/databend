@@ -194,7 +194,6 @@ impl SubqueryRewriter {
             marker_index: None,
             from_correlated_subquery: true,
             need_hold_hash_table: false,
-            broadcast: false,
             is_lateral: false,
             original_join_type: None,
         };
@@ -271,7 +270,6 @@ impl SubqueryRewriter {
                     marker_index: None,
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
-                    broadcast: false,
                     is_lateral: false,
                     original_join_type: None,
                 };
@@ -321,7 +319,6 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
-                    broadcast: false,
                     is_lateral: false,
                     original_join_type: None,
                 };
@@ -386,7 +383,6 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
-                    broadcast: false,
                     is_lateral: false,
                     original_join_type: None,
                 }
