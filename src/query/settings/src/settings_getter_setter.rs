@@ -573,4 +573,8 @@ impl Settings {
             u64::from(val),
         )
     }
+
+    pub fn get_enable_experimental_new_executor(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_new_executor")? == 1)
+    }
 }
