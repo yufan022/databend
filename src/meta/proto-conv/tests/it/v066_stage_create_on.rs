@@ -49,6 +49,7 @@ fn test_decode_v66_stage() -> anyhow::Result<()> {
             storage: StorageParams::S3(StorageS3Config {
                 bucket: "test".to_string(),
                 region: "test".to_string(),
+                allow_anonymous: true,
                 ..Default::default()
             }),
         },
