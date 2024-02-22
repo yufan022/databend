@@ -9100,8 +9100,8 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.44.2"
-source = "git+https://github.com/apache/opendal?rev=e94f068#e94f068a9977fcd20c9bb3626aaaa8be833209a8"
+version = "0.45.0"
+source = "git+https://github.com/apache/opendal?rev=72e3ea05#72e3ea05fa445cd015630b783e4a2915226f3a1a"
 dependencies = [
  "anyhow",
  "async-backtrace",
@@ -9124,7 +9124,7 @@ dependencies = [
  "prometheus",
  "prometheus-client",
  "prost 0.11.9",
- "quick-xml 0.30.0",
+ "quick-xml 0.31.0",
  "reqsign",
  "reqwest",
  "serde",
@@ -10506,16 +10506,6 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eff6510e86862b57b210fd8cbe8ed3f0d7d600b9c2863cd4549a2e033c66e956"
-dependencies = [
- "memchr",
- "serde",
-]
-
-[[package]]
-name = "quick-xml"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1004a344b30a54e2ee58d66a71b32d2db2feb0a31f9a2d302bf0536f15de2a33"
@@ -10800,9 +10790,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.14.6"
+version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dce87f66ba6c6acef277a729f989a0eca946cb9ce6a15bcc036bda0f72d4b9fd"
+checksum = "ed08ac3aa0676637644b1b892202f1ae789c28c15ebfa906128d111ae8086062"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10827,7 +10817,6 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
- "tokio",
 ]
 
 [[package]]
