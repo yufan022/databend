@@ -637,6 +637,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_experimental_new_executor", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental new executor",
+                    mode: SettingMode::Both,
+                    range: None,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
