@@ -123,7 +123,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'udf_server_allow_list'                    | ''                                                             | ''       |
 | 'query'   | 'users'                                    | '{"name":"root","auth_type":"no_password","auth_string":null}' | ''       |
 | 'query'   | 'wait_timeout_mills'                       | '5000'                                                         | ''       |
-| 'storage' | 'allow_insecure'                           | 'false'                                                        | ''       |
+| 'storage' | 'allow_insecure'                           | 'true'                                                         | ''       |
 | 'storage' | 'azblob.account_key'                       | ''                                                             | ''       |
 | 'storage' | 'azblob.account_name'                      | ''                                                             | ''       |
 | 'storage' | 'azblob.container'                         | ''                                                             | ''       |
