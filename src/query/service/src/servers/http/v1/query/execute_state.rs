@@ -272,7 +272,6 @@ impl ExecuteState {
     pub(crate) async fn try_start_query(
         executor: Arc<RwLock<Executor>>,
         plan: Plan,
-        extras: PlanExtras,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
         block_sender: SizedChannelSender<DataBlock>,
