@@ -133,7 +133,7 @@ impl SubqueryRewriter {
                 from_correlated_subquery: false,
                 need_hold_hash_table: false,
                 is_lateral: false,
-                original_join_type: None,
+                single_to_inner: None,
             }
             .into();
 
@@ -462,7 +462,7 @@ impl SubqueryRewriter {
                     from_correlated_subquery: false,
                     need_hold_hash_table: false,
                     is_lateral: false,
-                    original_join_type: None,
+                    single_to_inner: None,
                 }
                 .into(),
             ),
