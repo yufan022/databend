@@ -76,7 +76,9 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if (!dry_run && snapshot.segments.len() > nodes_num) || is_lazy {
+                if (!dry_run && snapshot.segments.len() > nodes_num && self.name() != "sql_meta")
+                    || is_lazy
+                {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
