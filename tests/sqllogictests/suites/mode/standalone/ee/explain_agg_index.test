@@ -154,67 +154,61 @@ EvalScalar
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [t1.b (#1) > 5], limit: NONE]
                 ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
-                ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1)], filter: index_col_0 (#0) > to_int32(5)]
+                ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1)], filter: index_col_0 (#0) > 5]
                 └── estimated rows: 0.00
 
 query T
 EXPLAIN SELECT t1.b, SUM(a) FROM t1 GROUP BY t1.b HAVING SUM(a)=(SELECT SUM(a) FROM t1 t WHERE t1.b=t.b and t.b > 3)
 ----
-Filter
+HashJoin
 ├── output columns: [SUM(a) (#2), t1.b (#1)]
-├── filters: [is_true(SUM(a) (#2) = scalar_subquery_5 (#5))]
+├── join type: INNER
+├── build keys: [scalar_subquery_5 (#5), b (#4)]
+├── probe keys: [SUM(a) (#2), b (#1)]
+├── filters: []
 ├── estimated rows: 0.00
-└── HashJoin
-    ├── output columns: [SUM(a) (#2), t1.b (#1), SUM(a) (#5)]
-    ├── join type: LEFT SINGLE
-    ├── build keys: [b (#4)]
-    ├── probe keys: [CAST(b (#1) AS Int32 NULL)]
-    ├── filters: []
+├── AggregateFinal(Build)
+│   ├── output columns: [SUM(a) (#5), t.b (#4)]
+│   ├── group by: [b]
+│   ├── aggregate functions: [sum(a)]
+│   ├── estimated rows: 0.00
+│   └── AggregatePartial
+│       ├── group by: [b]
+│       ├── aggregate functions: [sum(a)]
+│       ├── estimated rows: 0.00
+│       └── Filter
+│           ├── output columns: [t.a (#3), t.b (#4)]
+│           ├── filters: [b (#4) > 3]
+│           ├── estimated rows: 0.00
+│           └── TableScan
+│               ├── table: default.test_index_db.t1
+│               ├── output columns: [a (#3), b (#4)]
+│               ├── read rows: 0
+│               ├── read bytes: 0
+│               ├── partitions total: 0
+│               ├── partitions scanned: 0
+│               ├── push downs: [filters: [t1.b (#4) > 3], limit: NONE]
+│               ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE b > 3 GROUP BY b]
+│               ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1)]]
+│               └── estimated rows: 0.00
+└── AggregateFinal(Probe)
+    ├── output columns: [SUM(a) (#2), t1.b (#1)]
+    ├── group by: [b]
+    ├── aggregate functions: [sum(a)]
     ├── estimated rows: 0.00
-    ├── AggregateFinal(Build)
-    │   ├── output columns: [SUM(a) (#5), t.b (#4)]
-    │   ├── group by: [b]
-    │   ├── aggregate functions: [sum(a)]
-    │   ├── estimated rows: 0.00
-    │   └── AggregatePartial
-    │       ├── output columns: [SUM(a) (#5), #_group_by_key]
-    │       ├── group by: [b]
-    │       ├── aggregate functions: [sum(a)]
-    │       ├── estimated rows: 0.00
-    │       └── Filter
-    │           ├── output columns: [t.a (#3), t.b (#4)]
-    │           ├── filters: [t.b (#4) > 3]
-    │           ├── estimated rows: 0.00
-    │           └── TableScan
-    │               ├── table: default.test_index_db.t1
-    │               ├── output columns: [a (#3), b (#4)]
-    │               ├── read rows: 0
-    │               ├── read bytes: 0
-    │               ├── partitions total: 0
-    │               ├── partitions scanned: 0
-    │               ├── push downs: [filters: [t1.b (#4) > 3], limit: NONE]
-    │               ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
-    │               ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1)]]
-    │               └── estimated rows: 0.00
-    └── AggregateFinal(Probe)
-        ├── output columns: [SUM(a) (#2), t1.b (#1)]
+    └── AggregatePartial
         ├── group by: [b]
         ├── aggregate functions: [sum(a)]
         ├── estimated rows: 0.00
-        └── AggregatePartial
-            ├── output columns: [SUM(a) (#2), #_group_by_key]
-            ├── group by: [b]
-            ├── aggregate functions: [sum(a)]
-            ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.test_index_db.t1
-                ├── output columns: [a (#0), b (#1)]
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.test_index_db.t1
+            ├── output columns: [a (#0), b (#1)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
 
 # Disable aggregating index scan
 statement ok
@@ -509,7 +503,7 @@ Sort
             ├── estimated rows: 0.00
             └── Filter
                 ├── output columns: [onebrc.station_name (#0), onebrc.measurement (#1)]
-                ├── filters: [is_true(onebrc.station_name (#0) = 'Beijing'), is_true(onebrc.measurement (#1) > 0), is_true(onebrc.measurement (#1) = 1 OR onebrc.measurement (#1) = 2)]
+                ├── filters: [is_true(onebrc.measurement (#1) > 0), is_true(onebrc.station_name (#0) = 'Beijing'), is_true(onebrc.measurement (#1) = 1 OR onebrc.measurement (#1) = 2)]
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.test_index_db.onebrc
@@ -518,7 +512,7 @@ Sort
                     ├── read bytes: 0
                     ├── partitions total: 0
                     ├── partitions scanned: 0
-                    ├── push downs: [filters: [and_filters(and_filters(onebrc.station_name (#0) = 'Beijing', onebrc.measurement (#1) > 0), onebrc.measurement (#1) = 1 OR onebrc.measurement (#1) = 2)], limit: NONE]
+                    ├── push downs: [filters: [and_filters(and_filters(onebrc.measurement (#1) > 0, onebrc.station_name (#0) = 'Beijing'), onebrc.measurement (#1) = 1 OR onebrc.measurement (#1) = 2)], limit: NONE]
                     ├── aggregating index: [SELECT station_name, measurement, COUNT(), COUNT(measurement), MAX(measurement), MIN(measurement), SUM(measurement) FROM test_index_db.onebrc GROUP BY station_name, measurement]
                     ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1), index_col_5 (#5), index_col_6 (#6), index_col_3 (#3), index_col_4 (#4)], filter: is_true(CAST(onebrc.station_name (#0) AS Boolean NULL) AND CAST('Beijing' AS Boolean NULL) AND (onebrc.measurement (#1) = CAST(1 AS Float64 NULL) OR onebrc.measurement (#1) = CAST(2 AS Float64 NULL)) AND index_col_1 (#1) > CAST(0 AS Float64 NULL))]
                     └── estimated rows: 0.00

@@ -272,12 +272,10 @@ impl ExecuteState {
     pub(crate) async fn try_start_query(
         executor: Arc<RwLock<Executor>>,
         plan: Plan,
-        extras: PlanExtras,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
         block_sender: SizedChannelSender<DataBlock>,
     ) -> Result<()> {
-        ctx.attach_query_str(plan.kind(), extras.statement.to_mask_sql());
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let running_state = ExecuteRunning {
             session,
@@ -325,7 +323,7 @@ async fn execute(
         // duplicate codes, but there is an async call
         let data = BlockEntry::new(
             DataType::String,
-            databend_common_expression::Value::Scalar(Scalar::String(err.to_string().into_bytes())),
+            databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
         );
         block_sender.send(DataBlock::new(vec![data], 1), 1).await;
         return Err(err);
@@ -342,9 +340,7 @@ async fn execute(
             // duplicate codes, but there is an async call
             let data = BlockEntry::new(
                 DataType::String,
-                databend_common_expression::Value::Scalar(Scalar::String(
-                    err.to_string().into_bytes(),
-                )),
+                databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
             );
             block_sender.send(DataBlock::new(vec![data], 1), 1).await;
             Executor::stop(&executor, Err(err), false).await;
@@ -363,7 +359,7 @@ async fn execute(
                         let data = BlockEntry::new(
                             DataType::String,
                             databend_common_expression::Value::Scalar(Scalar::String(
-                                err.to_string().into_bytes(),
+                                err.to_string(),
                             )),
                         );
                         block_sender.send(DataBlock::new(vec![data], 1), 1).await;

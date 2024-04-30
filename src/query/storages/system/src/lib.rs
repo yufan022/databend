@@ -15,6 +15,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(type_alias_impl_trait)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(variant_count)]
 
 extern crate core;
 
@@ -45,8 +46,6 @@ mod processes_table;
 mod processor_profile_table;
 mod query_cache_table;
 mod query_log_table;
-mod query_profile_table;
-mod query_summary_table;
 mod roles_table;
 mod settings_table;
 mod stages_table;
@@ -96,8 +95,6 @@ pub use query_log_table::LogType;
 pub use query_log_table::QueryLogElement;
 pub use query_log_table::QueryLogQueue;
 pub use query_log_table::QueryLogTable;
-pub use query_profile_table::QueryProfileTable;
-pub use query_summary_table::QuerySummaryTable;
 pub use roles_table::RolesTable;
 pub use settings_table::SettingsTable;
 pub use stages_table::StagesTable;

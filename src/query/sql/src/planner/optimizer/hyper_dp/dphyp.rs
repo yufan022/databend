@@ -178,6 +178,12 @@ impl DPhpy {
                 }
                 // Add join conditions
                 for condition_pair in op.left_conditions.iter().zip(op.right_conditions.iter()) {
+                    let left_used_tables = condition_pair.0.used_tables()?;
+                    let right_used_tables = condition_pair.1.used_tables()?;
+                    if left_used_tables.is_empty() || right_used_tables.is_empty() {
+                        is_inner_join = false;
+                        break;
+                    }
                     join_conditions.push((condition_pair.0.clone(), condition_pair.1.clone()));
                 }
                 if !op.non_equi_conditions.is_empty() {
@@ -249,7 +255,7 @@ impl DPhpy {
                 self.join_relations.push(JoinRelation::new(&new_s_expr));
                 Ok((new_s_expr, true))
             }
-            RelOperator::Exchange(_) | RelOperator::AddRowNumber(_) | RelOperator::Pattern(_) => {
+            RelOperator::Exchange(_) | RelOperator::AddRowNumber(_) => {
                 unreachable!()
             }
             RelOperator::DummyTableScan(_)
@@ -709,6 +715,9 @@ impl DPhpy {
             RelOperator::Join(_) => {
                 new_s_expr.plan = join_expr.plan.clone();
                 new_s_expr.children = join_expr.children.clone();
+                if self.filters.is_empty() {
+                    return Ok(new_s_expr);
+                }
                 // Add filters to `new_s_expr`, then push down filters if possible
                 let mut predicates = vec![];
                 for filter in self.filters.iter() {
@@ -760,9 +769,9 @@ impl DPhpy {
         let rule = RuleFactory::create_rule(RuleID::PushDownFilterJoin, self.metadata.clone())?;
         let mut state = TransformResult::new();
         if rule
-            .patterns()
+            .matchers()
             .iter()
-            .any(|pattern| s_expr.match_pattern(pattern))
+            .any(|matcher| matcher.matches(&s_expr))
             && !s_expr.applied_rule(&rule.id())
         {
             s_expr.set_applied_rule(&rule.id());

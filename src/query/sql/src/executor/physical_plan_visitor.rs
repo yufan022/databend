@@ -209,6 +209,7 @@ pub trait PhysicalPlanReplacer {
             partition_by: plan.partition_by.clone(),
             order_by: plan.order_by.clone(),
             window_frame: plan.window_frame.clone(),
+            limit: plan.limit,
         }))
     }
 
@@ -234,7 +235,9 @@ pub trait PhysicalPlanReplacer {
             need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
             probe_keys_rt: plan.probe_keys_rt.clone(),
+            enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
             broadcast: plan.broadcast,
+            single_to_inner: plan.single_to_inner.clone(),
         }))
     }
 

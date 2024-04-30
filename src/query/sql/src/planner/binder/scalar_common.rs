@@ -22,7 +22,6 @@ use crate::optimizer::RelationalProperty;
 use crate::plans::walk_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
@@ -116,7 +115,7 @@ pub enum JoinPredicate<'a> {
     Both {
         left: &'a ScalarExpr,
         right: &'a ScalarExpr,
-        op: ComparisonOp,
+        is_equal_op: bool,
     },
     Other(&'a ScalarExpr),
 }
@@ -127,10 +126,6 @@ impl<'a> JoinPredicate<'a> {
         left_prop: &RelationalProperty,
         right_prop: &RelationalProperty,
     ) -> Self {
-        if contain_subquery(scalar) {
-            return Self::Other(scalar);
-        }
-
         if scalar.used_columns().is_empty() {
             return Self::ALL(scalar);
         }
@@ -144,20 +139,28 @@ impl<'a> JoinPredicate<'a> {
         }
 
         if let ScalarExpr::FunctionCall(func) = scalar {
-            if let Some(op) = ComparisonOp::try_from_func_name(func.func_name.as_str()) {
-                let left = &func.arguments[0];
-                let right = &func.arguments[1];
-                if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {
-                    return Self::Both { left, right, op };
-                }
+            if func.arguments.len() != 2 {
+                return Self::Other(scalar);
+            }
 
-                if satisfied_by(right, left_prop) && satisfied_by(left, right_prop) {
-                    return Self::Both {
-                        left: right,
-                        right: left,
-                        op,
-                    };
-                }
+            let is_equal_op = func.func_name.as_str() == "eq";
+            let left = &func.arguments[0];
+            let right = &func.arguments[1];
+
+            if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {
+                return Self::Both {
+                    left,
+                    right,
+                    is_equal_op,
+                };
+            }
+
+            if satisfied_by(right, left_prop) && satisfied_by(left, right_prop) {
+                return Self::Both {
+                    left: right,
+                    right: left,
+                    is_equal_op,
+                };
             }
         }
 

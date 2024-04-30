@@ -341,7 +341,7 @@ impl HttpQuery {
         let sql = request.sql.clone();
         let query_id_clone = query_id.clone();
 
-        let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone()).await?;
+        let (plan, _) = ExecuteState::plan_sql(&sql, ctx.clone()).await?;
         let schema = plan.schema();
 
         let span = if let Some(parent) = SpanContext::current_local_parent() {
@@ -358,7 +358,6 @@ impl HttpQuery {
                 if let Err(e) = ExecuteState::try_start_query(
                     state,
                     plan,
-                    plan_extras,
                     session,
                     ctx_clone.clone(),
                     block_sender,

@@ -100,6 +100,7 @@ use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::CteScan;
+use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
@@ -135,24 +136,11 @@ impl Binder {
                 }
             }
         }
-        let catalog = CATALOG_DEFAULT;
-        let database = "system";
-        let tenant = self.ctx.get_tenant();
-        let table_meta = self
-            .resolve_data_source(tenant.as_str(), catalog, database, "one", &None)
-            .await?;
-        let table_index = self.metadata.write().add_table(
-            CATALOG_DEFAULT.to_owned(),
-            database.to_string(),
-            table_meta,
-            None,
-            false,
-            false,
-            false,
-        );
-
-        self.bind_base_table(bind_context, database, table_index, None)
-            .await
+        let bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        Ok((
+            SExpr::create_leaf(Arc::new(DummyTableScan.into())),
+            bind_context,
+        ))
     }
 
     fn check_view_dep(bind_context: &BindContext, database: &str, view_name: &str) -> Result<()> {
@@ -1494,8 +1482,7 @@ impl Binder {
 // copy from common-storages-fuse to avoid cyclic dependency.
 fn string_value(value: &Scalar) -> Result<String> {
     match value {
-        Scalar::String(val) => String::from_utf8(val.clone())
-            .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e))),
+        Scalar::String(val) => Ok(val.clone()),
         other => Err(ErrorCode::BadArguments(format!(
             "Expected a string value, but found a '{}'.",
             other

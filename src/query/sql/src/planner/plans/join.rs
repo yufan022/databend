@@ -81,7 +81,14 @@ impl JoinType {
     }
 
     pub fn is_outer_join(&self) -> bool {
-        matches!(self, JoinType::Left | JoinType::Right | JoinType::Full)
+        matches!(
+            self,
+            JoinType::Left
+                | JoinType::Right
+                | JoinType::Full
+                | JoinType::LeftSingle
+                | JoinType::RightSingle
+        )
     }
 
     pub fn is_mark_join(&self) -> bool {
@@ -151,8 +158,10 @@ pub struct Join {
     // if we execute distributed merge into, we need to hold the
     // hash table to get not match data from source.
     pub need_hold_hash_table: bool,
-    // Under cluster, mark if the join is broadcast join.
-    pub broadcast: bool,
+    pub is_lateral: bool,
+    // When left/right single join converted to inner join, record the original join type
+    // and do some special processing during runtime.
+    pub single_to_inner: Option<JoinType>,
 }
 
 impl Default for Join {
@@ -165,7 +174,8 @@ impl Default for Join {
             marker_index: Default::default(),
             from_correlated_subquery: Default::default(),
             need_hold_hash_table: false,
-            broadcast: false,
+            is_lateral: false,
+            single_to_inner: None,
         }
     }
 }
@@ -526,7 +536,7 @@ impl Operator for Join {
                 | JoinType::Full
                 | JoinType::RightAnti
                 | JoinType::RightSemi
-                | JoinType::RightMark
+                | JoinType::LeftMark
         ) {
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
@@ -593,7 +603,7 @@ impl Operator for Join {
                 | JoinType::Full
                 | JoinType::RightAnti
                 | JoinType::RightSemi
-                | JoinType::RightMark
+                | JoinType::LeftMark
                 | JoinType::RightSingle
         ) {
             // (Any, Broadcast)

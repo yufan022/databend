@@ -32,7 +32,10 @@ use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::decorrelate::decorrelate_subquery;
 use crate::optimizer::distributed::optimize_distributed_query;
 use crate::optimizer::distributed::SortAndLimitPushDownOptimizer;
+use crate::optimizer::filter::DeduplicateJoinConditionOptimizer;
+use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
+use crate::optimizer::join::SingleToInnerOptimizer;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::RuleFactory;
@@ -119,14 +122,13 @@ impl<'a> RecursiveOptimizer<'a> {
 
     fn apply_transform_rules(&self, s_expr: &SExpr, rules: &[RuleID]) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
-
         for rule_id in rules {
             let rule = RuleFactory::create_rule(*rule_id, self.ctx.metadata.clone())?;
             let mut state = TransformResult::new();
             if rule
-                .patterns()
+                .matchers()
                 .iter()
-                .any(|pattern| s_expr.match_pattern(pattern))
+                .any(|matcher| matcher.matches(&s_expr))
                 && !s_expr.applied_rule(&rule.id())
             {
                 s_expr.set_applied_rule(&rule.id());
@@ -222,6 +224,9 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
         s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
     }
 
+    // Pull up and infer filter.
+    s_expr = PullUpFilterOptimizer::new(opt_ctx.metadata.clone()).run(&s_expr)?;
+
     // Run default rewrite rules
     s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, &opt_ctx).run(&s_expr)?;
 
@@ -232,10 +237,16 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
             .optimize(Arc::new(s_expr.clone()))?;
         if optimized {
             s_expr = (*dp_res).clone();
-            s_expr = RecursiveOptimizer::new(&[RuleID::CommuteJoin], &opt_ctx).run(&s_expr)?;
             dphyp_optimized = true;
         }
     }
+
+    // After join reorder, Convert some single join to inner join.
+    s_expr = SingleToInnerOptimizer::new().run(&s_expr)?;
+
+    // Deduplicate join conditions.
+    s_expr = DeduplicateJoinConditionOptimizer::new().run(&s_expr)?;
+
     let mut cascades = CascadesOptimizer::new(
         opt_ctx.table_ctx.clone(),
         opt_ctx.metadata.clone(),
@@ -246,8 +257,13 @@ pub fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SE
     // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
     s_expr = match cascades.optimize(s_expr.clone()) {
         Ok(mut s_expr) => {
-            s_expr =
-                RecursiveOptimizer::new(&[RuleID::EliminateEvalScalar], &opt_ctx).run(&s_expr)?;
+            let rules = if opt_ctx.enable_join_reorder {
+                [RuleID::EliminateEvalScalar, RuleID::CommuteJoin].as_slice()
+            } else {
+                [RuleID::EliminateEvalScalar].as_slice()
+            };
+
+            s_expr = RecursiveOptimizer::new(rules, &opt_ctx).run(&s_expr)?;
 
             // Push down sort and limit
             // TODO(leiysky): do this optimization in cascades optimizer
@@ -340,6 +356,8 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
         Arc::new(right_source),
     ]));
 
+    let join_op = Join::try_from(join_sexpr.plan().clone())?;
+    let non_equal_join = join_op.right_conditions.is_empty() && join_op.left_conditions.is_empty();
     // before, we think source table is always the small table.
     // 1. for matched only, we use inner join
     // 2. for insert only, we use right anti join
@@ -400,7 +418,7 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
     {
         // distributed execution stargeties:
         // I. change join order is true, we use the `optimize_distributed_query`'s result.
-        // II. change join order is false and match_pattern and not enable spill, we use right outer join with rownumber distributed strategies.
+        // II. change join order is false and match_pattern and not enable spill and not non-equal-join, we use right outer join with rownumber distributed strategies.
         // III otherwise, use `merge_into_join_sexpr` as standalone execution(so if change join order is false,but doesn't match_pattern, we don't support distributed,in fact. case I
         // can take this at most time, if that's a hash shuffle, the I can take it. We think source is always very small).
         // input is a Join_SExpr
@@ -415,7 +433,10 @@ fn optimize_merge_into(opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Resul
             .get_join_spilling_threshold()?
             == 0
             && !change_join_order
-            && merge_into_join_sexpr.match_pattern(&merge_source_optimizer.merge_source_pattern)
+            && merge_source_optimizer
+                .merge_source_matcher
+                .matches(&merge_into_join_sexpr)
+            && !non_equal_join
         {
             (
                 merge_source_optimizer.optimize(&merge_into_join_sexpr)?,
@@ -472,8 +493,7 @@ fn try_to_change_as_broadcast_join(
     if let RelOperator::Exchange(Exchange::Merge) = merge_into_join_sexpr.plan.as_ref() {
         let right_exchange = merge_into_join_sexpr.child(0)?.child(1)?;
         if let RelOperator::Exchange(Exchange::Broadcast) = right_exchange.plan.as_ref() {
-            let mut join: Join = merge_into_join_sexpr.child(0)?.plan().clone().try_into()?;
-            join.broadcast = true;
+            let join: Join = merge_into_join_sexpr.child(0)?.plan().clone().try_into()?;
             let join_s_expr = merge_into_join_sexpr
                 .child(0)?
                 .replace_plan(Arc::new(RelOperator::Join(join)));

@@ -25,16 +25,15 @@ use crate::binder::Visibility;
 use crate::optimizer::decorrelate::subquery_rewriter::FlattenInfo;
 use crate::optimizer::decorrelate::subquery_rewriter::SubqueryRewriter;
 use crate::optimizer::decorrelate::subquery_rewriter::UnnestResult;
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
-use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
@@ -87,63 +86,34 @@ impl SubqueryRewriter {
         //         EvalScalar
         //          \
         //           Get
-        let patterns = vec![
-            SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Filter,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Scan,
-                        }
-                        .into(),
-                    ))),
-                )),
-            ),
-            SExpr::create_unary(
-                Arc::new(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                ),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Filter,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::EvalScalar,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_leaf(Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Scan,
-                            }
-                            .into(),
-                        ))),
-                    )),
-                )),
-            ),
+        let matchers = vec![
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Filter,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Scan,
+                        children: vec![],
+                    }],
+                }],
+            },
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Filter,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::EvalScalar,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::Scan,
+                            children: vec![],
+                        }],
+                    }],
+                }],
+            },
         ];
         let mut matched = false;
-        for pattern in patterns {
-            if subquery.subquery.match_pattern(&pattern) {
+        for matcher in matchers {
+            if matcher.matches(&subquery.subquery) {
                 matched = true;
                 break;
             }
@@ -195,9 +165,12 @@ impl SubqueryRewriter {
                 }
 
                 JoinPredicate::Both {
-                    left, right, op, ..
+                    left,
+                    right,
+                    is_equal_op,
+                    ..
                 } => {
-                    if op == ComparisonOp::Equal {
+                    if is_equal_op {
                         left_conditions.push(left.clone());
                         right_conditions.push(right.clone());
                     } else {
@@ -221,7 +194,8 @@ impl SubqueryRewriter {
             marker_index: None,
             from_correlated_subquery: true,
             need_hold_hash_table: false,
-            broadcast: false,
+            is_lateral: false,
+            single_to_inner: None,
         };
 
         // Rewrite plan to semi-join.
@@ -288,15 +262,30 @@ impl SubqueryRewriter {
                     &mut right_conditions,
                     &mut left_conditions,
                 )?;
+
+                let mut join_type = JoinType::LeftSingle;
+                if subquery.contain_agg.unwrap() {
+                    let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
+                    let has_precise_cardinality = rel_expr
+                        .derive_cardinality()?
+                        .statistics
+                        .precise_cardinality
+                        .is_some();
+                    if has_precise_cardinality {
+                        join_type = JoinType::Left;
+                    }
+                }
+
                 let join_plan = Join {
                     left_conditions,
                     right_conditions,
                     non_equi_conditions: vec![],
-                    join_type: JoinType::LeftSingle,
+                    join_type,
                     marker_index: None,
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
-                    broadcast: false,
+                    is_lateral: false,
+                    single_to_inner: None,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -344,7 +333,8 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
-                    broadcast: false,
+                    is_lateral: false,
+                    single_to_inner: None,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -407,7 +397,8 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                     need_hold_hash_table: false,
-                    broadcast: false,
+                    is_lateral: false,
+                    single_to_inner: None,
                 }
                 .into();
                 Ok((
@@ -441,6 +432,7 @@ impl SubqueryRewriter {
                     Box::from(column_entry.data_type()),
                     Visibility::Visible,
                 )
+                .table_index(column_entry.table_index())
                 .build(),
             });
             let derive_column = self.derived_columns.get(correlated_column).unwrap();
@@ -453,6 +445,7 @@ impl SubqueryRewriter {
                     Box::from(column_entry.data_type()),
                     Visibility::Visible,
                 )
+                .table_index(column_entry.table_index())
                 .build(),
             });
             left_conditions.push(left_column);

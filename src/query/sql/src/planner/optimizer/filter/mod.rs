@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod mgr;
-mod proc;
-mod prof;
+mod deduplicate_join_condition;
+mod infer_filter;
+mod normalize_disjunctive_filter;
+mod pull_up_filter;
 
-pub use mgr::QueryProfileManager;
-pub use proc::*;
-pub use prof::*;
+pub use deduplicate_join_condition::DeduplicateJoinConditionOptimizer;
+pub use infer_filter::InferFilterOptimizer;
+pub use infer_filter::JoinProperty;
+pub use normalize_disjunctive_filter::NormalizeDisjunctiveFilterOptimizer;
+pub use pull_up_filter::PullUpFilterOptimizer;

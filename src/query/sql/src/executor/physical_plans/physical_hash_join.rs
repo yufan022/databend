@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_cast;
@@ -27,14 +30,17 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
+use crate::executor::physical_plans::FragmentKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 
@@ -69,10 +75,15 @@ pub struct HashJoin {
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 
-    // probe keys for runtime filter
-    pub probe_keys_rt: Vec<Option<RemoteExpr<String>>>,
+    // probe keys for runtime filter, and record the index of table that used in probe keys.
+    pub probe_keys_rt: Vec<Option<(RemoteExpr<String>, IndexType)>>,
+    // If enable bloom runtime filter
+    pub enable_bloom_runtime_filter: bool,
     // Under cluster, mark if the join is broadcast join.
     pub broadcast: bool,
+    // When left/right single join converted to inner join, record the original join type
+    // and do some special processing during runtime.
+    pub single_to_inner: Option<JoinType>,
 }
 
 impl HashJoin {
@@ -93,6 +104,16 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let mut probe_side = Box::new(self.build(s_expr.child(0)?, required.0).await?);
         let mut build_side = Box::new(self.build(s_expr.child(1)?, required.1).await?);
+
+        let mut is_broadcast = false;
+        // Check if join is broadcast join
+        if let PhysicalPlan::Exchange(Exchange {
+            kind: FragmentKind::Expansive,
+            ..
+        }) = build_side.as_ref()
+        {
+            is_broadcast = true;
+        }
         // Unify the data types of the left and right exchange keys.
         if let (
             PhysicalPlan::Exchange(Exchange {
@@ -177,6 +198,7 @@ impl PhysicalPlanBuilder {
         let mut right_join_conditions = Vec::new();
         let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
+        let mut table_index = None;
         for (left_condition, right_condition) in join
             .left_conditions
             .iter()
@@ -189,25 +211,38 @@ impl PhysicalPlanBuilder {
                 .type_check(probe_schema.as_ref())?
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
 
-            let left_expr_for_runtime_filter =
-                if left_condition.used_columns().iter().all(|idx| {
-                    // Runtime filter only support column in base table. It's possible to use a wrong derived column with
-                    // the same name as a base table column, so we need to check if the column is a base table column.
-                    matches!(
-                        self.metadata.read().column(*idx),
-                        ColumnEntry::BaseTableColumn(_)
-                    )
-                }) && matches!(probe_side, box PhysicalPlan::TableScan(_))
-                {
-                    Some(
+            let left_expr_for_runtime_filter = if left_condition.used_columns().iter().all(|idx| {
+                // Runtime filter only support column in base table. It's possible to use a wrong derived column with
+                // the same name as a base table column, so we need to check if the column is a base table column.
+                matches!(
+                    self.metadata.read().column(*idx),
+                    ColumnEntry::BaseTableColumn(_)
+                )
+            }) {
+                if let Some(column_idx) = left_condition.used_columns().iter().next() {
+                    // Safe to unwrap because we have checked the column is a base table column.
+                    if table_index.is_none() {
+                        table_index = Some(
+                            self.metadata
+                                .read()
+                                .column(*column_idx)
+                                .table_index()
+                                .unwrap(),
+                        );
+                    }
+                    Some((
                         left_condition
                             .as_raw_expr()
                             .type_check(&*self.metadata.read())?
                             .project_column_ref(|col| col.column_name.clone()),
-                    )
+                        table_index.unwrap(),
+                    ))
                 } else {
                     None
-                };
+                }
+            } else {
+                None
+            };
 
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
@@ -266,7 +301,10 @@ impl PhysicalPlanBuilder {
             )?;
 
             let left_expr_for_runtime_filter = left_expr_for_runtime_filter
-                .map(|expr| check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS))
+                .map(|(expr, idx)| {
+                    check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS)
+                        .map(|casted_expr| (casted_expr, idx))
+                })
                 .transpose()?;
 
             let (left_expr, _) =
@@ -274,13 +312,17 @@ impl PhysicalPlanBuilder {
             let (right_expr, _) =
                 ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-            let left_expr_for_runtime_filter = left_expr_for_runtime_filter
-                .map(|expr| ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0);
+            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(|(expr, idx)| {
+                (
+                    ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0,
+                    idx,
+                )
+            });
 
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
             left_join_conditions_rt
-                .push(left_expr_for_runtime_filter.map(|expr| expr.as_remote_expr()));
+                .push(left_expr_for_runtime_filter.map(|(expr, idx)| (expr.as_remote_expr(), idx)));
         }
 
         let mut probe_projections = ColumnSet::new();
@@ -461,7 +503,37 @@ impl PhysicalPlanBuilder {
             output_schema,
             need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(stat_info),
-            broadcast: join.broadcast,
+            broadcast: is_broadcast,
+            single_to_inner: join.single_to_inner.clone(),
+            enable_bloom_runtime_filter: adjust_bloom_runtime_filter(
+                self.ctx.clone(),
+                &self.metadata,
+                table_index,
+                s_expr,
+            )
+            .await?,
         }))
     }
+}
+
+// Check if enable bloom runtime filter
+async fn adjust_bloom_runtime_filter(
+    ctx: Arc<dyn TableContext>,
+    metadata: &MetadataRef,
+    table_index: Option<IndexType>,
+    s_expr: &SExpr,
+) -> Result<bool> {
+    if let Some(table_index) = table_index {
+        let table = metadata.read().table(table_index).table();
+        if let Some(stats) = table.table_statistics(ctx.clone()).await? {
+            if let Some(num_rows) = stats.num_rows {
+                let join_cardinality = RelExpr::with_s_expr(s_expr)
+                    .derive_cardinality()?
+                    .cardinality;
+                // If the filtered data reduces to less than 1/1000 of the original dataset, we will enable bloom runtime filter.
+                return Ok(join_cardinality <= (num_rows / 1000) as f64);
+            }
+        }
+    }
+    Ok(false)
 }
