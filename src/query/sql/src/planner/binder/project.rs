@@ -99,9 +99,11 @@ impl Binder {
                 ScalarExpr::WindowFunction(win) => {
                     find_replaced_window_function(window_info, win, &item.alias).unwrap()
                 }
-                _ => {
-                    self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
-                }
+                _ => self.create_derived_column_binding(
+                    item.alias.clone(),
+                    item.scalar.data_type()?,
+                    Some(item.scalar.clone()),
+                ),
             };
 
             if is_grouping_sets_item {
