@@ -447,5 +447,22 @@ CompoundBlockOperator(Project) × 1 processor
                 DeserializeDataTransform × 1 processor
                   SyncReadParquetDataSource × 1 processor
 
+# same order multi window
+query T
+explain  pipeline select *,lead(number,1, 42) over (order by number), lead(number,2,44) over (order by number), lead(number,3,44) over (order by number) from numbers(5);
+----
+CompoundBlockOperator(Project) × 1 processor
+  Transform Window × 1 processor
+    CompoundBlockOperator(Map) × 1 processor
+      Transform Window × 1 processor
+        CompoundBlockOperator(Map) × 1 processor
+          Transform Window × 1 processor
+            Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
+              TransformSortMerge × 4 processors
+                SortPartialTransform × 4 processors
+                  Merge (CompoundBlockOperator(Map) × 1 processor) to (SortPartialTransform × 4)
+                    CompoundBlockOperator(Map) × 1 processor
+                      NumbersSourceTransform × 1 processor
+
 statement ok
 DROP DATABASE test_explain_window;
