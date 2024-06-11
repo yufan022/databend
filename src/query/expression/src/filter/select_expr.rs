@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use itertools::Itertools;
+
 use crate::filter::select_expr_permutation::FilterPermutation;
 use crate::filter::SelectOp;
 use crate::types::DataType;
@@ -119,7 +121,9 @@ pub fn build_select_expr(expr: &Expr) -> SelectExprBuildResult {
                         SelectExpr::Or((or_args, FilterPermutation::new(num_exprs, can_reorder)));
                     SelectExprBuildResult::new(select_expr, true, true)
                 }
-                "eq" | "noteq" | "gt" | "lt" | "gte" | "lte" => {
+                "eq" | "noteq" | "gt" | "lt" | "gte" | "lte"
+                    if function.signature.args_type.iter().all_equal() =>
+                {
                     let select_op = SelectOp::try_from_func_name(&function.signature.name).unwrap();
                     SelectExprBuildResult::new(
                         SelectExpr::Compare((select_op, args.clone(), generics.clone())),
