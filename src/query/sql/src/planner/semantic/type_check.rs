@@ -210,7 +210,7 @@ impl<'a> TypeChecker<'a> {
                 return Err(ErrorCode::SemanticError(
                     "set-returning functions are only allowed in SELECT clause",
                 )
-                .set_span(expr.span()));
+                    .set_span(expr.span()));
             }
             // Found a SRF, return it directly.
             // See `Binder::bind_project_set` for more details.
@@ -262,7 +262,7 @@ impl<'a> TypeChecker<'a> {
                                     span: *span,
                                     column,
                                 }
-                                .into(),
+                                    .into(),
                                 data_type,
                             )
                         }
@@ -285,7 +285,7 @@ impl<'a> TypeChecker<'a> {
                                     span: *span,
                                     column,
                                 }
-                                .into(),
+                                    .into(),
                                 data_type,
                             )
                         }
@@ -417,7 +417,7 @@ impl<'a> TypeChecker<'a> {
                             window: None,
                             lambda: None,
                         })
-                        .await?
+                            .await?
                     } else {
                         self.resolve_function(*span, "contains", vec![], &args)
                             .await?
@@ -520,7 +520,7 @@ impl<'a> TypeChecker<'a> {
                                     Some(*left.clone()),
                                     Some(comparison_op),
                                 )
-                                .await?
+                                    .await?
                             }
                             SubqueryModifier::All => {
                                 let contrary_op = op.to_contrary()?;
@@ -535,7 +535,7 @@ impl<'a> TypeChecker<'a> {
                                     left: (*left).clone(),
                                     right: Box::new(rewritten_subquery),
                                 })
-                                .await?
+                                    .await?
                             }
                         }
                     } else {
@@ -602,7 +602,7 @@ impl<'a> TypeChecker<'a> {
                         argument: Box::new(scalar),
                         target_type: Box::new(target_type.clone()),
                     }
-                    .into(),
+                        .into(),
                     target_type,
                 ))
             }
@@ -640,7 +640,7 @@ impl<'a> TypeChecker<'a> {
                         argument: Box::new(scalar),
                         target_type: Box::new(checked_expr.data_type().clone()),
                     }
-                    .into(),
+                        .into(),
                     checked_expr.data_type().clone(),
                 ))
             }
@@ -752,7 +752,7 @@ impl<'a> TypeChecker<'a> {
                             return Err(ErrorCode::UnknownFunction(format!(
                                 "no function matches the given name: {func_name}"
                             ))
-                            .set_span(*span));
+                                .set_span(*span));
                         } else {
                             return Err(ErrorCode::UnknownFunction(format!(
                                 "no function matches the given name: '{func_name}', do you mean {}?",
@@ -771,14 +771,14 @@ impl<'a> TypeChecker<'a> {
                     return Err(ErrorCode::SemanticError(
                         "only window and aggregate functions allowed in window syntax",
                     )
-                    .set_span(*span));
+                        .set_span(*span));
                 }
                 // check lambda function legal
                 if lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&func_name) {
                     return Err(ErrorCode::SemanticError(
                         "only lambda functions allowed in lambda syntax",
                     )
-                    .set_span(*span));
+                        .set_span(*span));
                 }
 
                 let args: Vec<&Expr> = args.iter().collect();
@@ -796,21 +796,21 @@ impl<'a> TypeChecker<'a> {
                         return Err(ErrorCode::SemanticError(
                             "set-returning functions cannot be nested".to_string(),
                         )
-                        .set_span(*span));
+                            .set_span(*span));
                     }
 
                     if self.in_window_function {
                         return Err(ErrorCode::SemanticError(
                             "set-returning functions cannot be used in window spec",
                         )
-                        .set_span(*span));
+                            .set_span(*span));
                     }
 
                     if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
                         return Err(ErrorCode::SemanticError(
                             "set-returning functions can only be used in SELECT".to_string(),
                         )
-                        .set_span(*span));
+                            .set_span(*span));
                     }
 
                     // Should have been handled with `BindContext::srfs`
@@ -844,7 +844,7 @@ impl<'a> TypeChecker<'a> {
                                 ErrorCode::SemanticError(format!(
                                     "invalid parameter {param} for aggregate function, expected constant",
                                 ))
-                                .set_span(*span)
+                                    .set_span(*span)
                             })?
                             .1;
                         new_params.push(constant);
@@ -892,7 +892,7 @@ impl<'a> TypeChecker<'a> {
                                 ErrorCode::SemanticError(format!(
                                     "invalid parameter {param} for scalar function, expected constant",
                                 ))
-                                .set_span(*span)
+                                    .set_span(*span)
                             })?
                             .1;
                         new_params.push(constant);
@@ -930,7 +930,7 @@ impl<'a> TypeChecker<'a> {
                     None,
                     None,
                 )
-                .await?
+                    .await?
             }
 
             Expr::Subquery { subquery, .. } => {
@@ -962,7 +962,7 @@ impl<'a> TypeChecker<'a> {
                     Some(*expr.clone()),
                     Some(ComparisonOp::Equal),
                 )
-                .await?
+                    .await?
             }
 
             expr @ Expr::MapAccess { .. } => {
@@ -984,7 +984,7 @@ impl<'a> TypeChecker<'a> {
                                     "Unsupported accessor: {:?}",
                                     lit
                                 ))
-                                .set_span(*span));
+                                    .set_span(*span));
                             }
                             lit.clone()
                         }
@@ -995,7 +995,7 @@ impl<'a> TypeChecker<'a> {
                                 "Unsupported accessor: {:?}",
                                 accessor
                             ))
-                            .set_span(*span));
+                                .set_span(*span));
                         }
                     };
                     paths.push_front((*span, path));
@@ -1015,7 +1015,7 @@ impl<'a> TypeChecker<'a> {
                 return Err(ErrorCode::SemanticError(
                     "Unsupported interval expression yet".to_string(),
                 )
-                .set_span(*span));
+                    .set_span(*span));
             }
             Expr::DateAdd {
                 span,
@@ -1041,7 +1041,7 @@ impl<'a> TypeChecker<'a> {
                     },
                     date,
                 )
-                .await?
+                    .await?
             }
             Expr::DateTrunc {
                 span, unit, date, ..
@@ -1065,7 +1065,7 @@ impl<'a> TypeChecker<'a> {
                     substr_expr.as_ref(),
                     str_expr.as_ref(),
                 ])
-                .await?
+                    .await?
             }
 
             Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs).await?,
@@ -1084,7 +1084,7 @@ impl<'a> TypeChecker<'a> {
                     span: expr.span,
                     value: databend_common_expression::Scalar::Number(1i64.into()),
                 }
-                .into();
+                    .into();
             }
         }
     }
@@ -1103,7 +1103,7 @@ impl<'a> TypeChecker<'a> {
             return Err(ErrorCode::SemanticError(
                 "aggregate function calls cannot contain window function calls".to_string(),
             )
-            .set_span(span));
+                .set_span(span));
         }
         if self.in_window_function {
             // Reset the state
@@ -1111,7 +1111,7 @@ impl<'a> TypeChecker<'a> {
             return Err(ErrorCode::SemanticError(
                 "window function calls cannot be nested".to_string(),
             )
-            .set_span(span));
+                .set_span(span));
         }
 
         let spec = match window {
@@ -1192,7 +1192,7 @@ impl<'a> TypeChecker<'a> {
         Err(ErrorCode::SemanticError(
             "Only unsigned numbers are allowed in ROWS offset".to_string(),
         )
-        .set_span(expr.span()))
+            .set_span(expr.span()))
     }
 
     #[inline]
@@ -1268,7 +1268,7 @@ impl<'a> TypeChecker<'a> {
                     Err(ErrorCode::SemanticError(
                         "Only constant is allowed in RANGE offset".to_string(),
                     )
-                    .set_span(expr.span()))
+                        .set_span(expr.span()))
                 }
             }
             _ => Ok(None),
@@ -1400,7 +1400,7 @@ impl<'a> TypeChecker<'a> {
             return Err(ErrorCode::SemanticError(
                 "window functions can not be used in lambda function".to_string(),
             )
-            .set_span(span));
+                .set_span(span));
         }
         if matches!(
             self.bind_context.expr_context,
@@ -1409,7 +1409,7 @@ impl<'a> TypeChecker<'a> {
             return Err(ErrorCode::SemanticError(
                 "window functions can not be used in set-returning function".to_string(),
             )
-            .set_span(span));
+                .set_span(span));
         }
         // try to resolve window function without arguments first
         if let Ok(window_func) = WindowFuncType::from_name(func_name) {
@@ -1421,7 +1421,7 @@ impl<'a> TypeChecker<'a> {
             return Err(ErrorCode::SemanticError(
                 "window function calls cannot be nested".to_string(),
             )
-            .set_span(span));
+                .set_span(span));
         }
 
         self.in_window_function = true;
@@ -1643,7 +1643,7 @@ impl<'a> TypeChecker<'a> {
             return Err(ErrorCode::SemanticError(
                 "aggregate functions can not be used in lambda function".to_string(),
             )
-            .set_span(span));
+                .set_span(span));
         }
         if matches!(
             self.bind_context.expr_context,
@@ -1652,7 +1652,7 @@ impl<'a> TypeChecker<'a> {
             return Err(ErrorCode::SemanticError(
                 "aggregate functions can not be used in set-returning function".to_string(),
             )
-            .set_span(span));
+                .set_span(span));
         }
         if self.in_aggregate_function {
             if self.in_window_function {
@@ -1667,7 +1667,7 @@ impl<'a> TypeChecker<'a> {
                 return Err(ErrorCode::SemanticError(
                     "aggregate function calls cannot be nested".to_string(),
                 )
-                .set_span(expr.span()));
+                    .set_span(expr.span()));
             }
         }
 
@@ -1795,7 +1795,7 @@ impl<'a> TypeChecker<'a> {
             return Err(ErrorCode::SemanticError(
                 "lambda functions can not be used in lambda function".to_string(),
             )
-            .set_span(span));
+                .set_span(span));
         }
         let params = lambda
             .params
@@ -1892,7 +1892,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     value: Scalar::Null,
                 }
-                .into(),
+                    .into(),
                 DataType::Null,
             ),
             DataType::EmptyArray => (
@@ -1900,7 +1900,7 @@ impl<'a> TypeChecker<'a> {
                     span,
                     value: Scalar::EmptyArray,
                 }
-                .into(),
+                    .into(),
                 DataType::EmptyArray,
             ),
             _ => {
@@ -1932,7 +1932,7 @@ impl<'a> TypeChecker<'a> {
                         lambda_display,
                         return_type: Box::new(return_type.clone()),
                     }
-                    .into(),
+                        .into(),
                     return_type,
                 )
             }
@@ -1975,11 +1975,11 @@ impl<'a> TypeChecker<'a> {
         // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
         if (func_name == "substr" || func_name == "substring")
             && self
-                .ctx
-                .get_settings()
-                .get_sql_dialect()
-                .unwrap()
-                .substr_index_zero_literal_as_one()
+            .ctx
+            .get_settings()
+            .get_sql_dialect()
+            .unwrap()
+            .substr_index_zero_literal_as_one()
         {
             Self::rewrite_substring(&mut args);
         }
@@ -2089,7 +2089,7 @@ impl<'a> TypeChecker<'a> {
                 arguments: folded_args,
                 func_name: func_name.to_string(),
             }
-            .into(),
+                .into(),
             expr.data_type().clone(),
         )))
     }
@@ -2436,14 +2436,14 @@ impl<'a> TypeChecker<'a> {
                     span,
                     lit: Literal::String(self.ctx.get_current_database()),
                 })
-                .await,
+                    .await,
             ),
             ("version", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
                     lit: Literal::String(self.ctx.get_fuse_version()),
                 })
-                .await,
+                    .await,
             ),
             ("user" | "currentuser" | "current_user", &[]) => match self.ctx.get_current_user() {
                 Ok(user) => Some(
@@ -2451,7 +2451,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         lit: Literal::String(user.identity().to_string()),
                     })
-                    .await,
+                        .await,
                 ),
                 Err(e) => Some(Err(e)),
             },
@@ -2465,14 +2465,14 @@ impl<'a> TypeChecker<'a> {
                             .unwrap_or_default(),
                     ),
                 })
-                .await,
+                    .await,
             ),
             ("connection_id", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
                     lit: Literal::String(self.ctx.get_connection_id()),
                 })
-                .await,
+                    .await,
             ),
             ("timezone", &[]) => {
                 let tz = self.ctx.get_settings().get_timezone().unwrap();
@@ -2481,7 +2481,7 @@ impl<'a> TypeChecker<'a> {
                         span,
                         lit: Literal::String(tz),
                     })
-                    .await,
+                        .await,
                 )
             }
             ("nullif", &[arg_x, arg_y]) => {
@@ -2500,7 +2500,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         arg_x,
                     ])
-                    .await,
+                        .await,
                 )
             }
             ("ifnull", &[arg_x, arg_y]) => {
@@ -2515,7 +2515,7 @@ impl<'a> TypeChecker<'a> {
                         arg_y,
                         arg_x,
                     ])
-                    .await,
+                        .await,
                 )
             }
             ("is_null", &[arg_x]) => {
@@ -2534,7 +2534,7 @@ impl<'a> TypeChecker<'a> {
                         window: None,
                         lambda: None,
                     })
-                    .await,
+                        .await,
                 )
             }
             ("coalesce", args) => {
@@ -2589,7 +2589,7 @@ impl<'a> TypeChecker<'a> {
                         return Some(Err(ErrorCode::BadArguments(
                             "last_query_id needs at most one integer argument",
                         )
-                        .set_span(span)));
+                            .set_span(span)));
                     }
                     if args.is_empty() {
                         -1
@@ -2608,7 +2608,7 @@ impl<'a> TypeChecker<'a> {
                                 return Some(Err(ErrorCode::BadArguments(
                                     "last_query_id argument only support constant",
                                 )
-                                .set_span(span)));
+                                    .set_span(span)));
                             }
                         }
                     }
@@ -2621,7 +2621,7 @@ impl<'a> TypeChecker<'a> {
                             span,
                             lit: Literal::String(query_id),
                         })
-                        .await
+                            .await
                     }
                     Err(e) => Err(e),
                 })
@@ -2768,7 +2768,7 @@ impl<'a> TypeChecker<'a> {
                 span,
                 value: databend_common_expression::Scalar::String(" ".to_string()),
             }
-            .into();
+                .into();
             ("trim_both", trim_scalar, DataType::String)
         };
 
@@ -2970,7 +2970,7 @@ impl<'a> TypeChecker<'a> {
                 udf_definition.arg_types.len(),
                 arguments.len()
             ))
-            .set_span(span));
+                .set_span(span));
         }
 
         let mut args = Vec::with_capacity(arguments.len());
@@ -2998,7 +2998,7 @@ impl<'a> TypeChecker<'a> {
                 return_type: Box::new(udf_definition.return_type.clone()),
                 arguments: args,
             }
-            .into(),
+                .into(),
             udf_definition.return_type.clone(),
         )))
     }
@@ -3019,7 +3019,7 @@ impl<'a> TypeChecker<'a> {
                 parameters.len(),
                 arguments.len()
             ))
-            .set_span(span));
+                .set_span(span));
         }
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
@@ -3048,7 +3048,7 @@ impl<'a> TypeChecker<'a> {
                 func_name,
                 scalar: Box::new(scalar.0),
             }
-            .into(),
+                .into(),
             scalar.1,
         )))
     }
@@ -3100,13 +3100,13 @@ impl<'a> TypeChecker<'a> {
             } => {
                 let mut args = Vec::with_capacity(fields_name.len() * 2);
                 for ((idx, field_name), field_type) in
-                    fields_name.iter().enumerate().zip(fields_type.iter())
+                fields_name.iter().enumerate().zip(fields_type.iter())
                 {
                     let key = ConstantExpr {
                         span,
                         value: Scalar::String(field_name.clone()),
                     }
-                    .into();
+                        .into();
 
                     let value = FunctionCall {
                         span,
@@ -3114,7 +3114,7 @@ impl<'a> TypeChecker<'a> {
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
                     }
-                    .into();
+                        .into();
 
                     let value =
                         if matches!(field_type.remove_nullable(), TableDataType::Tuple { .. }) {
@@ -3138,7 +3138,7 @@ impl<'a> TypeChecker<'a> {
                     arguments: args,
                     func_name,
                 }
-                .into()
+                    .into()
             }
             _ => {
                 let func_name = if is_try {
@@ -3152,7 +3152,7 @@ impl<'a> TypeChecker<'a> {
                     arguments: vec![scalar.clone()],
                     func_name,
                 }
-                .into()
+                    .into()
             }
         }
     }
@@ -3239,7 +3239,7 @@ impl<'a> TypeChecker<'a> {
                     params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
                     arguments: vec![scalar.clone()],
                 }
-                .into();
+                    .into();
                 continue;
             }
             let box (path_scalar, _) = self.resolve_literal(span, &path_lit)?;
@@ -3253,7 +3253,7 @@ impl<'a> TypeChecker<'a> {
                 params: vec![],
                 arguments: vec![scalar.clone(), path_scalar],
             }
-            .into();
+                .into();
         }
         let return_type = scalar.data_type()?;
         Ok(Box::new((scalar, return_type)))
@@ -3284,7 +3284,7 @@ impl<'a> TypeChecker<'a> {
                             return Err(ErrorCode::SemanticError(
                                 "tuple index is starting from 1, but 0 is found".to_string(),
                             )
-                            .set_span(span));
+                                .set_span(span));
                         }
                         if idx as usize > fields_type.len() {
                             return Err(ErrorCode::SemanticError(format!(
@@ -3292,7 +3292,7 @@ impl<'a> TypeChecker<'a> {
                                 idx,
                                 fields_type.len()
                             ))
-                            .set_span(span));
+                                .set_span(span));
                         }
                         let inner_name = fields_name.get(idx as usize - 1).unwrap();
                         let inner_type = fields_type.get(idx as usize - 1).unwrap();
@@ -3313,7 +3313,7 @@ impl<'a> TypeChecker<'a> {
                                 "tuple name `{}` does not exist, available names are: {:?}",
                                 name, &fields_name
                             ))
-                            .set_span(span));
+                                .set_span(span));
                         }
                     },
                     _ => unreachable!(),
@@ -3356,7 +3356,7 @@ impl<'a> TypeChecker<'a> {
                         arguments: vec![scalar.clone()],
                         func_name: "get".to_string(),
                     }
-                    .into();
+                        .into();
                     scalar = wrap_cast(&scalar, &DataType::from(&table_data_type));
                 }
                 let return_type = scalar.data_type()?;
@@ -3384,7 +3384,7 @@ impl<'a> TypeChecker<'a> {
             None,
             &values,
         )
-        .await?;
+            .await?;
         assert_eq!(ctx.columns.len(), 1);
         // Wrap group by on `const_scan` to deduplicate values
         let distinct_const_scan = SExpr::create_unary(
@@ -3403,7 +3403,7 @@ impl<'a> TypeChecker<'a> {
                     limit: None,
                     grouping_sets: None,
                 }
-                .into(),
+                    .into(),
             ),
             Arc::new(const_scan),
         );
@@ -3448,7 +3448,7 @@ impl<'a> TypeChecker<'a> {
                             i32::MAX,
                             idx
                         ))
-                        .set_span(*span));
+                            .set_span(*span));
                     }
                 }
                 Literal::String(field) => KeyPath::QuotedName(std::borrow::Cow::Borrowed(field)),
@@ -3482,8 +3482,8 @@ impl<'a> TypeChecker<'a> {
         original_expr: &Expr,
         replacement_fn: &F,
     ) -> Result<Expr>
-    where
-        F: Fn(&Expr) -> Result<Option<Expr>>,
+        where
+            F: Fn(&Expr) -> Result<Option<Expr>>,
     {
         let replacement_opt = replacement_fn(original_expr)?;
         match replacement_opt {
@@ -3776,7 +3776,7 @@ impl<'a> TypeChecker<'a> {
                         span: expr.span(),
                         value: scalar,
                     }
-                    .into(),
+                        .into(),
                     ty,
                 )));
             }
