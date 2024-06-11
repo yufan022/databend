@@ -44,6 +44,7 @@ pub struct Sort {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+    pub window_partition: Vec<IndexType>,
 }
 
 impl Sort {
@@ -119,6 +120,12 @@ impl PhysicalPlanBuilder {
             None
         };
 
+        let window_partition = sort
+            .window_partition
+            .iter()
+            .map(|v| v.index)
+            .collect::<Vec<_>>();
+
         // 2. Build physical plan.
         Ok(PhysicalPlan::Sort(Sort {
             plan_id: self.next_plan_id(),
@@ -136,6 +143,7 @@ impl PhysicalPlanBuilder {
             after_exchange: sort.after_exchange,
             pre_projection,
             stat_info: Some(stat_info),
+            window_partition,
         }))
     }
 }
