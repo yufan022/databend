@@ -627,7 +627,7 @@ optimize table t11 compact limit 2
 query F
 select average_depth from clustering_information('db_09_0008','t11')
 ----
-1.6667
+1.0
 
 query I
 select * from t11 order by a
