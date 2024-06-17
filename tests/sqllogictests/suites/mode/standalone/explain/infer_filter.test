@@ -948,7 +948,7 @@ HashJoin
 │       ├── table: default.default.t2
 │       ├── output columns: [id (#1)]
 │       ├── read rows: 1
-│       ├── read size: < 1 KiB
+│       ├── read bytes: 41
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
@@ -962,7 +962,7 @@ HashJoin
         ├── table: default.default.t1
         ├── output columns: [id (#0)]
         ├── read rows: 1
-        ├── read size: < 1 KiB
+        ├── read bytes: 39
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]

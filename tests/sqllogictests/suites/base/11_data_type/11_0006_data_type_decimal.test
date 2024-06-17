@@ -48,7 +48,7 @@ DECIMAL(39, 0)
 
 
 statement ok
-create or replace database decimal_t;
+create database decimal_t;
 
 statement ok
 use decimal_t;

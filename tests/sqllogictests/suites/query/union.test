@@ -238,7 +238,7 @@ select t1.a from t1, t2 where t1.a = t2.a
 90
 
 statement ok
-CREATE OR REPLACE TABLE `test3` (
+CREATE TABLE `test3` (
   `user_id` BIGINT NOT NULL,
   `parent` BIGINT NOT NULL
 );
@@ -260,7 +260,7 @@ statement ok
 drop table test3;
 
 statement ok
-CREATE OR REPLACE TABLE `test4` (
+CREATE TABLE `test4` (
   `user_id` BIGINT NOT NULL,
   `parent` BIGINT NULL
 );

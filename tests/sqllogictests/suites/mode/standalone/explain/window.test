@@ -23,15 +23,19 @@ Sort
     ├── partition by: [depname]
     ├── order by: [empno]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── TableScan
-        ├── table: default.test_explain_window.empsalary
-        ├── output columns: [depname (#0), empno (#1), salary (#2)]
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 0.00
+    └── Sort
+        ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2)]
+        ├── sort keys: [depname ASC NULLS LAST, empno ASC NULLS LAST]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.test_explain_window.empsalary
+            ├── output columns: [depname (#0), empno (#1), salary (#2)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
 
 statement ok
 set max_threads=4;
@@ -72,35 +76,39 @@ Filter
     ├── partition by: [k]
     ├── order by: [v]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── UnionAll
+    └── Sort
         ├── output columns: [test.k (#0), test.v (#1)]
+        ├── sort keys: [k ASC NULLS LAST, v DESC NULLS LAST]
         ├── estimated rows: 0.00
-        ├── Filter
-        │   ├── output columns: [test.k (#0), test.v (#1)]
-        │   ├── filters: [is_true(test.k (#0) = 12)]
-        │   ├── estimated rows: 0.00
-        │   └── TableScan
-        │       ├── table: default.test_explain_window.test
-        │       ├── output columns: [k (#0), v (#1)]
-        │       ├── read rows: 0
-        │       ├── read bytes: 0
-        │       ├── partitions total: 0
-        │       ├── partitions scanned: 0
-        │       ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
-        │       └── estimated rows: 0.00
-        └── Filter
-            ├── output columns: [test.k (#2), test.v (#3)]
-            ├── filters: [is_true(test.k (#2) = 12)]
+        └── UnionAll
+            ├── output columns: [test.k (#0), test.v (#1)]
             ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.test_explain_window.test
-                ├── output columns: [k (#2), v (#3)]
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
-                └── estimated rows: 0.00
+            ├── Filter
+            │   ├── output columns: [test.k (#0), test.v (#1)]
+            │   ├── filters: [is_true(test.k (#0) = 12)]
+            │   ├── estimated rows: 0.00
+            │   └── TableScan
+            │       ├── table: default.test_explain_window.test
+            │       ├── output columns: [k (#0), v (#1)]
+            │       ├── read rows: 0
+            │       ├── read bytes: 0
+            │       ├── partitions total: 0
+            │       ├── partitions scanned: 0
+            │       ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
+            │       └── estimated rows: 0.00
+            └── Filter
+                ├── output columns: [test.k (#2), test.v (#3)]
+                ├── filters: [is_true(test.k (#2) = 12)]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.test_explain_window.test
+                    ├── output columns: [k (#2), v (#3)]
+                    ├── read rows: 0
+                    ├── read bytes: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
+                    └── estimated rows: 0.00
 
 # cannot push down filter in window function
 query T
@@ -116,27 +124,31 @@ Filter
     ├── partition by: [v]
     ├── order by: [v]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── UnionAll
+    └── Sort
         ├── output columns: [test.k (#0), test.v (#1)]
+        ├── sort keys: [v ASC NULLS LAST, v DESC NULLS LAST]
         ├── estimated rows: 0.00
-        ├── TableScan
-        │   ├── table: default.test_explain_window.test
-        │   ├── output columns: [k (#0), v (#1)]
-        │   ├── read rows: 0
-        │   ├── read bytes: 0
-        │   ├── partitions total: 0
-        │   ├── partitions scanned: 0
-        │   ├── push downs: [filters: [], limit: NONE]
-        │   └── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.test_explain_window.test
-            ├── output columns: [k (#2), v (#3)]
-            ├── read rows: 0
-            ├── read bytes: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 0.00
+        └── UnionAll
+            ├── output columns: [test.k (#0), test.v (#1)]
+            ├── estimated rows: 0.00
+            ├── TableScan
+            │   ├── table: default.test_explain_window.test
+            │   ├── output columns: [k (#0), v (#1)]
+            │   ├── read rows: 0
+            │   ├── read bytes: 0
+            │   ├── partitions total: 0
+            │   ├── partitions scanned: 0
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_explain_window.test
+                ├── output columns: [k (#2), v (#3)]
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 # cannot push down filter in window function
 query T
@@ -152,27 +164,31 @@ Filter
     ├── partition by: []
     ├── order by: [v]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── UnionAll
+    └── Sort
         ├── output columns: [test.k (#0), test.v (#1)]
+        ├── sort keys: [v DESC NULLS LAST]
         ├── estimated rows: 0.00
-        ├── TableScan
-        │   ├── table: default.test_explain_window.test
-        │   ├── output columns: [k (#0), v (#1)]
-        │   ├── read rows: 0
-        │   ├── read bytes: 0
-        │   ├── partitions total: 0
-        │   ├── partitions scanned: 0
-        │   ├── push downs: [filters: [], limit: NONE]
-        │   └── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.test_explain_window.test
-            ├── output columns: [k (#2), v (#3)]
-            ├── read rows: 0
-            ├── read bytes: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 0.00
+        └── UnionAll
+            ├── output columns: [test.k (#0), test.v (#1)]
+            ├── estimated rows: 0.00
+            ├── TableScan
+            │   ├── table: default.test_explain_window.test
+            │   ├── output columns: [k (#0), v (#1)]
+            │   ├── read rows: 0
+            │   ├── read bytes: 0
+            │   ├── partitions total: 0
+            │   ├── partitions scanned: 0
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_explain_window.test
+                ├── output columns: [k (#2), v (#3)]
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 statement ok
 drop table if exists t
@@ -193,15 +209,19 @@ Filter
   ├── partition by: [a]
   ├── order by: []
   ├── frame: [Range: Preceding(None) ~ Following(None)]
-  └── TableScan
-    ├── table: default.test_explain_window.t
-    ├── output columns: [a (#0)]
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
-    └── estimated rows: 0.00
+  └── Sort
+      ├── output columns: [t.a (#0)]
+      ├── sort keys: [a ASC NULLS LAST]
+      ├── estimated rows: 0.00
+      └── TableScan
+          ├── table: default.test_explain_window.t
+          ├── output columns: [a (#0)]
+          ├── read rows: 0
+          ├── read bytes: 0
+          ├── partitions total: 0
+          ├── partitions scanned: 0
+          ├── push downs: [filters: [], limit: NONE]
+          └── estimated rows: 0.00
 
 ## example from: https://community.snowflake.com/s/article/Pushdown-or-Not-Pushdown
 statement ok
@@ -225,19 +245,23 @@ Window
 ├── partition by: []
 ├── order by: [b]
 ├── frame: [Range: Preceding(None) ~ CurrentRow]
-└── Filter
+└── Sort
     ├── output columns: [tbpush.b (#0)]
-    ├── filters: [is_true(tbpush.b (#0) > 3)]
+    ├── sort keys: [b ASC NULLS LAST]
     ├── estimated rows: 0.00
-    └── TableScan
-      ├── table: default.test_explain_window.tbpush
-      ├── output columns: [b (#0)]
-      ├── read rows: 0
-      ├── read bytes: 0
-      ├── partitions total: 0
-      ├── partitions scanned: 0
-      ├── push downs: [filters: [is_true(tbpush.b (#0) > 3)], limit: NONE]
-      └── estimated rows: 0.00
+    └── Filter
+        ├── output columns: [tbpush.b (#0)]
+        ├── filters: [is_true(tbpush.b (#0) > 3)]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.test_explain_window.tbpush
+            ├── output columns: [b (#0)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [is_true(tbpush.b (#0) > 3)], limit: NONE]
+            └── estimated rows: 0.00
 
 query T
 explain select * from vwpush where b > 3;
@@ -252,15 +276,19 @@ Filter
     ├── partition by: []
     ├── order by: [b]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── TableScan
-        ├── table: default.test_explain_window.tbpush
-        ├── output columns: [b (#0)]
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 0.00
+    └── Sort
+        ├── output columns: [tbpush.b (#0)]
+        ├── sort keys: [b ASC NULLS LAST]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.test_explain_window.tbpush
+            ├── output columns: [b (#0)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
 
 query T
 explain select * from (select b, row_number() over (order by b) from tbpush) where b > 3;
@@ -275,15 +303,19 @@ Filter
     ├── partition by: []
     ├── order by: [b]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── TableScan
-        ├── table: default.test_explain_window.tbpush
-        ├── output columns: [b (#0)]
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 0.00
+    └── Sort
+        ├── output columns: [tbpush.b (#0)]
+        ├── sort keys: [b ASC NULLS LAST]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.test_explain_window.tbpush
+            ├── output columns: [b (#0)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
 
 # test push down limit to window function
 statement ok
@@ -313,8 +345,8 @@ explain pipeline select a, dense_rank() over (partition by a order by a desc) fr
 CompoundBlockOperator(Project) × 1 processor
   LimitTransform × 1 processor
     Transform Window × 1 processor
-      Merge (TransformSortMergeLimit × 4 processors) to (Transform Window × 1)
-        TransformSortMergeLimit × 4 processors
+      Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
+        TransformSortMerge × 4 processors
           SortPartialTransform × 4 processors
             Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
               DeserializeDataTransform × 1 processor
@@ -327,8 +359,8 @@ explain pipeline select a, sum(a) over (partition by a order by a desc rows betw
 CompoundBlockOperator(Project) × 1 processor
   LimitTransform × 1 processor
     Transform Window × 1 processor
-      Merge (TransformSortMergeLimit × 4 processors) to (Transform Window × 1)
-        TransformSortMergeLimit × 4 processors
+      Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
+        TransformSortMerge × 4 processors
           SortPartialTransform × 4 processors
             Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
               DeserializeDataTransform × 1 processor
@@ -412,19 +444,23 @@ RowFetch
             ├── partition by: [a]
             ├── order by: [a]
             ├── frame: [Rows: Preceding(None) ~ CurrentRow]
-            └── Filter
+            └── Sort
                 ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7)]
-                ├── filters: [is_true(t.a (#0) > 1)]
+                ├── sort keys: [a ASC NULLS LAST, a DESC NULLS LAST]
                 ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.test_explain_window.t
-                    ├── output columns: [a (#0), b (#1), _row_id (#7)]
-                    ├── read rows: 0
-                    ├── read bytes: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]
-                    └── estimated rows: 0.00
+                └── Filter
+                    ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7)]
+                    ├── filters: [is_true(t.a (#0) > 1)]
+                    ├── estimated rows: 0.00
+                    └── TableScan
+                        ├── table: default.test_explain_window.t
+                        ├── output columns: [a (#0), b (#1), _row_id (#7)]
+                        ├── read rows: 0
+                        ├── read bytes: 0
+                        ├── partitions total: 0
+                        ├── partitions scanned: 0
+                        ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]
+                        └── estimated rows: 0.00
 
 statement ok
 drop table if exists table43764_orc
@@ -468,16 +504,16 @@ CompoundBlockOperator(Project) × 1 processor
 query T
 explain pipeline select number, lead(number,1, 0) over (partition by number % 3 order by number+ 1), lead(number,2, 0) over (partition by number % 3 order by number + 1) from numbers(50);
 ----
-CompoundBlockOperator(Project) × 1
-  Transform Window × 1
-    CompoundBlockOperator(Map) × 1
-      Transform Window × 1
-        Merge to MultiSortMerge × 1
-          TransformSortMerge × 4
-            SortPartialTransform × 4
-              Merge to Resize × 4
-                CompoundBlockOperator(Map) × 1
-                  NumbersSourceTransform × 1
+CompoundBlockOperator(Project) × 1 processor
+  Transform Window × 1 processor
+    CompoundBlockOperator(Map) × 1 processor
+      Transform Window × 1 processor
+        Merge (TransformSortMerge × 4 processors) to (Transform Window × 1)
+          TransformSortMerge × 4 processors
+            SortPartialTransform × 4 processors
+              Merge (CompoundBlockOperator(Map) × 1 processor) to (SortPartialTransform × 4)
+                CompoundBlockOperator(Map) × 1 processor
+                  NumbersSourceTransform × 1 processor
 
 
 statement ok
