@@ -47,6 +47,8 @@ pub struct AggregateFinal {
     pub before_group_by_schema: DataSchemaRef,
     pub limit: Option<usize>,
 
+    pub group_by_display: Vec<String>,
+
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -114,6 +116,12 @@ impl PhysicalPlanBuilder {
 
         let result = match &agg.mode {
             AggregateMode::Partial => {
+                let group_by_display = agg
+                    .group_items
+                    .iter()
+                    .map(|item| Ok(item.scalar.as_expr()?.sql_display()))
+                    .collect::<Result<Vec<_>>>()?;
+
                 let mut agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
                     if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
                         Ok(AggregateFunctionDesc {
@@ -140,6 +148,7 @@ impl PhysicalPlanBuilder {
                                     ))
                                 }
                             }).collect::<Result<_>>()?,
+                            display: v.scalar.as_expr()?.sql_display(),
                         })
                     } else {
                         Err(ErrorCode::Internal("Expected aggregate function".to_string()))
@@ -148,6 +157,8 @@ impl PhysicalPlanBuilder {
 
                 let settings = self.ctx.get_settings();
                 let group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
+                let enable_experimental_aggregate_hashtable =
+                    settings.get_enable_experimental_aggregate_hashtable()?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     assert_eq!(grouping_sets.dup_group_items.len(), group_items.len() - 1); // ignore `_grouping_id`.
@@ -182,6 +193,8 @@ impl PhysicalPlanBuilder {
                                 plan_id: self.next_plan_id(),
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 agg_funcs,
+                                enable_experimental_aggregate_hashtable,
+                                group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
                             }
@@ -190,6 +203,8 @@ impl PhysicalPlanBuilder {
                                 plan_id: self.next_plan_id(),
                                 input,
                                 agg_funcs,
+                                enable_experimental_aggregate_hashtable,
+                                group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
                             }
@@ -197,17 +212,42 @@ impl PhysicalPlanBuilder {
 
                         let settings = self.ctx.get_settings();
                         let efficiently_memory = settings.get_efficiently_memory_group_by()?;
+                        let enable_experimental_aggregate_hashtable =
+                            settings.get_enable_experimental_aggregate_hashtable()?;
 
-                        let group_by_key_index =
-                            aggregate_partial.output_schema()?.num_fields() - 1;
-                        let group_by_key_data_type = DataBlock::choose_hash_method_with_types(
-                            &agg.group_items
-                                .iter()
-                                .map(|v| v.scalar.data_type())
-                                .collect::<Result<Vec<_>>>()?,
-                            efficiently_memory,
-                        )?
-                        .data_type();
+                        let keys = if enable_experimental_aggregate_hashtable {
+                            let schema = aggregate_partial.output_schema()?;
+                            let start = aggregate_partial.agg_funcs.len();
+                            let end = schema.num_fields();
+                            let mut groups = Vec::with_capacity(end - start);
+                            for idx in start..end {
+                                let group_key = RemoteExpr::ColumnRef {
+                                    span: None,
+                                    id: idx,
+                                    data_type: schema.field(idx).data_type().clone(),
+                                    display_name: (idx - start).to_string(),
+                                };
+                                groups.push(group_key);
+                            }
+                            groups
+                        } else {
+                            let group_by_key_index =
+                                aggregate_partial.output_schema()?.num_fields() - 1;
+                            let group_by_key_data_type = DataBlock::choose_hash_method_with_types(
+                                &agg.group_items
+                                    .iter()
+                                    .map(|v| v.scalar.data_type())
+                                    .collect::<Result<Vec<_>>>()?,
+                                efficiently_memory,
+                            )?
+                            .data_type();
+                            vec![RemoteExpr::ColumnRef {
+                                span: None,
+                                id: group_by_key_index,
+                                data_type: group_by_key_data_type,
+                                display_name: "_group_by_key".to_string(),
+                            }]
+                        };
 
                         PhysicalPlan::Exchange(Exchange {
                             plan_id: self.next_plan_id(),
@@ -215,12 +255,7 @@ impl PhysicalPlanBuilder {
                             allow_adjust_parallelism: true,
                             ignore_exchange: false,
                             input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
-                            keys: vec![RemoteExpr::ColumnRef {
-                                span: None,
-                                id: group_by_key_index,
-                                data_type: group_by_key_data_type,
-                                display_name: "_group_by_key".to_string(),
-                            }],
+                            keys,
                         })
                     }
                     _ => {
@@ -235,6 +270,8 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
                                 plan_id: self.next_plan_id(),
                                 agg_funcs,
+                                enable_experimental_aggregate_hashtable,
+                                group_by_display,
                                 group_by: group_items,
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 stat_info: Some(stat_info),
@@ -243,6 +280,8 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
                                 plan_id: self.next_plan_id(),
                                 agg_funcs,
+                                enable_experimental_aggregate_hashtable,
+                                group_by_display,
                                 group_by: group_items,
                                 input: Box::new(input),
                                 stat_info: Some(stat_info),
@@ -296,6 +335,7 @@ impl PhysicalPlanBuilder {
                                     ))
                                 }
                             }).collect::<Result<_>>()?,
+                            display: v.scalar.as_expr()?.sql_display(),
                         })
                     } else {
                         Err(ErrorCode::Internal("Expected aggregate function".to_string()))
@@ -321,6 +361,7 @@ impl PhysicalPlanBuilder {
                         let limit = agg.limit;
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: self.next_plan_id(),
+                            group_by_display: partial.group_by_display.clone(),
                             input: Box::new(input),
                             group_by: group_items,
                             agg_funcs,
@@ -340,6 +381,7 @@ impl PhysicalPlanBuilder {
 
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: self.next_plan_id(),
+                            group_by_display: partial.group_by_display.clone(),
                             input: Box::new(input),
                             group_by: group_items,
                             agg_funcs,

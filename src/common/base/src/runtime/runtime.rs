@@ -159,6 +159,7 @@ impl Runtime {
 
             runtime_builder.thread_stack_size(20 * 1024 * 1024);
         }
+        runtime_builder.thread_stack_size(100 * 1024 * 1024);
 
         Self::create(None, mem_stat, &mut runtime_builder)
     }
@@ -185,6 +186,7 @@ impl Runtime {
 
             runtime_builder.thread_stack_size(20 * 1024 * 1024);
         }
+        runtime_builder.thread_stack_size(100 * 1024 * 1024);
 
         if let Some(thread_name) = &thread_name {
             runtime_builder.thread_name(thread_name);
