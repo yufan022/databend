@@ -14,14 +14,16 @@
 
 use bumpalo::Bump;
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_io::prelude::bincode_deserialize_from_slice;
+use databend_common_io::prelude::bincode_serialize_into_buf;
 use ethnum::i256;
 
-use crate::load;
-use crate::select_vector::SelectVector;
+use crate::read;
 use crate::store;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalType;
+use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::BinaryType;
 use crate::types::BooleanType;
@@ -34,13 +36,13 @@ use crate::types::ValueType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::Scalar;
+use crate::SelectVector;
 
 pub fn rowformat_size(data_type: &DataType) -> usize {
     match data_type {
         DataType::Null | DataType::EmptyArray | DataType::EmptyMap => 0,
         DataType::Boolean => 1,
-        // use address instead
-        DataType::Binary | DataType::String | DataType::Bitmap | DataType::Variant => 4 + 8, /* u32 len + address */
         DataType::Number(n) => n.bit_width() as usize / 8,
         DataType::Decimal(n) => match n {
             crate::types::DecimalDataType::Decimal128(_) => 16,
@@ -48,10 +50,10 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         },
         DataType::Timestamp => 8,
         DataType::Date => 4,
-        DataType::Nullable(_) => 4,
-        DataType::Array(_) => todo!(),
-        DataType::Map(_) => todo!(),
-        DataType::Tuple(_) => todo!(),
+        // use address instead
+        DataType::Binary | DataType::String | DataType::Bitmap | DataType::Variant => 4 + 8, /* u32 len + address */
+        DataType::Nullable(x) => rowformat_size(x),
+        DataType::Array(_) | DataType::Map(_) | DataType::Tuple(_) => 4 + 8,
         DataType::Generic(_) => unreachable!(),
     }
 }
@@ -60,18 +62,17 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
 pub unsafe fn serialize_column_to_rowformat(
     arena: &Bump,
     column: &Column,
-    select_index: &SelectVector,
+    select_vector: &SelectVector,
     rows: usize,
     address: &[*const u8],
     offset: usize,
-    _scratch: &mut Vec<u8>,
+    scratch: &mut Vec<u8>,
 ) {
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(buffer) => {
-                for i in 0..rows {
-                    let index = select_index.get_index(i);
+                for index in select_vector.iter().take(rows).copied() {
                     store(&buffer[index], address[index].add(offset) as *mut u8);
                 }
             }
@@ -79,26 +80,32 @@ pub unsafe fn serialize_column_to_rowformat(
         Column::Decimal(v) => {
             with_decimal_mapped_type!(|DECIMAL_TYPE| match v {
                 DecimalColumn::DECIMAL_TYPE(buffer, _) => {
-                    for i in 0..rows {
-                        let index = select_index.get_index(i);
+                    for index in select_vector.iter().take(rows).copied() {
                         store(&buffer[index], address[index].add(offset) as *mut u8);
                     }
                 }
             })
         }
         Column::Boolean(v) => {
-            for i in 0..rows {
-                let index = select_index.get_index(i);
-                store(&v.get_bit(index), address[index].add(offset) as *mut u8);
+            if v.unset_bits() == 0 || v.unset_bits() == v.len() {
+                let val: u8 = if v.unset_bits() == 0 { 1 } else { 0 };
+                // faster path
+                for index in select_vector.iter().take(rows).copied() {
+                    store(&val, address[index].add(offset) as *mut u8);
+                }
+            } else {
+                for index in select_vector.iter().take(rows).copied() {
+                    store(
+                        &(v.get_bit(index) as u8),
+                        address[index].add(offset) as *mut u8,
+                    );
+                }
             }
         }
         Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) => {
-            for i in 0..rows {
-                let index = select_index.get_index(i);
+            for index in select_vector.iter().take(rows).copied() {
                 let data = arena.alloc_slice_copy(v.index_unchecked(index));
-
                 store(&(data.len() as u32), address[index].add(offset) as *mut u8);
-
                 store(
                     &(data.as_ptr() as u64),
                     address[index].add(offset + 4) as *mut u8,
@@ -106,12 +113,9 @@ pub unsafe fn serialize_column_to_rowformat(
             }
         }
         Column::String(v) => {
-            for i in 0..rows {
-                let index = select_index.get_index(i);
-                let data = arena.alloc_slice_copy(v.index_unchecked(index).as_bytes());
-
+            for index in select_vector.iter().take(rows).copied() {
+                let data = arena.alloc_str(v.index_unchecked(index));
                 store(&(data.len() as u32), address[index].add(offset) as *mut u8);
-
                 store(
                     &(data.as_ptr() as u64),
                     address[index].add(offset + 4) as *mut u8,
@@ -119,32 +123,39 @@ pub unsafe fn serialize_column_to_rowformat(
             }
         }
         Column::Timestamp(buffer) => {
-            for i in 0..rows {
-                let index = select_index.get_index(i);
+            for index in select_vector.iter().take(rows).copied() {
                 store(&buffer[index], address[index].add(offset) as *mut u8);
             }
         }
         Column::Date(buffer) => {
-            for i in 0..rows {
-                let index = select_index.get_index(i);
+            for index in select_vector.iter().take(rows).copied() {
                 store(&buffer[index], address[index].add(offset) as *mut u8);
             }
         }
         Column::Nullable(c) => serialize_column_to_rowformat(
             arena,
             &c.column,
-            select_index,
+            select_vector,
             rows,
             address,
             offset,
-            _scratch,
+            scratch,
         ),
 
-        Column::Array(_array) | Column::Map(_array) => {
-            todo!("nested tuple/array/map not supported yet")
-        }
-        Column::Tuple(_fields) => {
-            todo!("nested tuple/array/map not supported yet")
+        // for complex column
+        other => {
+            for index in select_vector.iter().take(rows).copied() {
+                let s = other.index_unchecked(index).to_owned();
+                scratch.clear();
+                bincode_serialize_into_buf(scratch, &s).unwrap();
+
+                let data = arena.alloc_slice_copy(scratch);
+                store(&(data.len() as u32), address[index].add(offset) as *mut u8);
+                store(
+                    &(data.as_ptr() as u64),
+                    address[index].add(offset + 4) as *mut u8,
+                );
+            }
         }
     }
 }
@@ -152,7 +163,8 @@ pub unsafe fn serialize_column_to_rowformat(
 pub unsafe fn row_match_columns(
     cols: &[Column],
     address: &[*const u8],
-    select_index: &mut SelectVector,
+    select_vector: &mut SelectVector,
+    temp_vector: &mut SelectVector,
     count: usize,
     validity_offset: &[usize],
     col_offsets: &[usize],
@@ -168,20 +180,27 @@ pub unsafe fn row_match_columns(
         row_match_column(
             col,
             address,
-            select_index,
+            select_vector,
+            temp_vector,
             &mut count,
             *validity_offset,
             *col_offset,
             no_match,
             no_match_count,
-        )
+        );
+
+        // no row matches
+        if count == 0 {
+            return;
+        }
     }
 }
 
 pub unsafe fn row_match_column(
     col: &Column,
     address: &[*const u8],
-    select_index: &mut SelectVector,
+    select_vector: &mut SelectVector,
+    temp_vector: &mut SelectVector,
     count: &mut usize,
     validity_offset: usize,
     col_offset: usize,
@@ -205,7 +224,8 @@ pub unsafe fn row_match_column(
                     col,
                     validity,
                     address,
-                    select_index,
+                    select_vector,
+                    temp_vector,
                     count,
                     validity_offset,
                     col_offset,
@@ -219,7 +239,8 @@ pub unsafe fn row_match_column(
                 col,
                 validity,
                 address,
-                select_index,
+                select_vector,
+                temp_vector,
                 count,
                 validity_offset,
                 col_offset,
@@ -230,7 +251,8 @@ pub unsafe fn row_match_column(
                 col,
                 validity,
                 address,
-                select_index,
+                select_vector,
+                temp_vector,
                 count,
                 validity_offset,
                 col_offset,
@@ -242,7 +264,8 @@ pub unsafe fn row_match_column(
             col,
             validity,
             address,
-            select_index,
+            select_vector,
+            temp_vector,
             count,
             validity_offset,
             col_offset,
@@ -253,7 +276,8 @@ pub unsafe fn row_match_column(
             col,
             validity,
             address,
-            select_index,
+            select_vector,
+            temp_vector,
             count,
             validity_offset,
             col_offset,
@@ -264,39 +288,52 @@ pub unsafe fn row_match_column(
             col,
             validity,
             address,
-            select_index,
+            select_vector,
+            temp_vector,
             count,
             validity_offset,
             col_offset,
             no_match,
             no_match_count,
         ),
-        Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) => row_match_binary_column(
+        Column::Bitmap(v) | Column::Binary(v) | Column::Variant(v) => row_match_binary_column(
             v,
             validity,
             address,
-            select_index,
+            select_vector,
+            temp_vector,
             count,
             validity_offset,
             col_offset,
             no_match,
             no_match_count,
         ),
-        Column::String(v) => row_match_binary_column(
-            &v.clone().into(),
-            validity,
+        Column::String(v) => {
+            let v = &BinaryColumn::from(v.clone());
+            row_match_binary_column(
+                v,
+                validity,
+                address,
+                select_vector,
+                temp_vector,
+                count,
+                validity_offset,
+                col_offset,
+                no_match,
+                no_match_count,
+            )
+        }
+        Column::Nullable(_) => unreachable!("nullable is unwrapped"),
+        other => row_match_generic_column(
+            other,
             address,
-            select_index,
+            select_vector,
+            temp_vector,
             count,
-            validity_offset,
             col_offset,
             no_match,
             no_match_count,
         ),
-        Column::Nullable(_) => unreachable!(),
-        Column::Array(_) => todo!(),
-        Column::Map(_) => todo!(),
-        Column::Tuple(_) => todo!(),
     }
 }
 
@@ -304,7 +341,8 @@ unsafe fn row_match_binary_column(
     col: &BinaryColumn,
     validity: Option<&Bitmap>,
     address: &[*const u8],
-    select_index: &mut SelectVector,
+    select_vector: &mut SelectVector,
+    temp_vector: &mut SelectVector,
     count: &mut usize,
     validity_offset: usize,
     col_offset: usize,
@@ -315,64 +353,67 @@ unsafe fn row_match_binary_column(
     let mut equal: bool;
 
     if let Some(validity) = validity {
-        for i in 0..*count {
-            let idx = select_index.get_index(i);
-            let isnull = !validity.get_bit(idx);
-
+        let is_all_set = validity.unset_bits() == 0;
+        for idx in select_vector[..*count].iter() {
+            let idx = *idx;
             let validity_address = address[idx].add(validity_offset);
-            let isnull2 = load::<u8>(validity_address) != 0;
+            let is_set2 = read::<u8>(validity_address as _) != 0;
+            let is_set = is_all_set || validity.get_bit_unchecked(idx);
 
-            equal = isnull == isnull2;
-            if !isnull && !isnull2 {
+            if is_set && is_set2 {
                 let len_address = address[idx].add(col_offset);
                 let address = address[idx].add(col_offset + 4);
-                let len = load::<u32>(len_address) as usize;
+                let len = read::<u32>(len_address as _) as usize;
 
                 let value = BinaryType::index_column_unchecked(col, idx);
                 if len != value.len() {
                     equal = false;
                 } else {
-                    let data_address = load::<u64>(address) as usize as *const u8;
+                    let data_address = read::<u64>(address as _) as usize as *const u8;
                     let scalar = std::slice::from_raw_parts(data_address, len);
-                    equal = scalar.eq(value);
+                    equal = databend_common_hashtable::fast_memcmp(scalar, value);
                 }
+            } else {
+                equal = is_set == is_set2;
             }
 
             if equal {
-                select_index.set_index(match_count, idx);
+                temp_vector[match_count] = idx;
                 match_count += 1;
             } else {
-                no_match.set_index(*no_match_count, idx);
+                no_match[*no_match_count] = idx;
                 *no_match_count += 1;
             }
         }
     } else {
-        for i in 0..*count {
-            let idx = select_index.get_index(i);
-
+        for idx in select_vector[..*count].iter() {
+            let idx = *idx;
             let len_address = address[idx].add(col_offset);
             let address = address[idx].add(col_offset + 4);
 
-            let len = load::<u32>(len_address) as usize;
+            let len = read::<u32>(len_address as _) as usize;
 
             let value = BinaryType::index_column_unchecked(col, idx);
             if len != value.len() {
                 equal = false;
             } else {
-                let data_address = load::<u64>(address) as usize as *const u8;
+                let data_address = read::<u64>(address as _) as usize as *const u8;
                 let scalar = std::slice::from_raw_parts(data_address, len);
-                equal = scalar.eq(value);
+
+                equal = databend_common_hashtable::fast_memcmp(scalar, value);
             }
 
             if equal {
-                select_index.set_index(match_count, idx);
+                temp_vector[match_count] = idx;
                 match_count += 1;
             } else {
-                no_match.set_index(*no_match_count, idx);
+                no_match[*no_match_count] = idx;
                 *no_match_count += 1;
             }
         }
     }
+
+    select_vector.clone_from_slice(temp_vector);
 
     *count = match_count;
 }
@@ -381,7 +422,8 @@ unsafe fn row_match_column_type<T: ArgType>(
     col: &Column,
     validity: Option<&Bitmap>,
     address: &[*const u8],
-    select_index: &mut SelectVector,
+    select_vector: &mut SelectVector,
+    temp_vector: &mut SelectVector,
     count: &mut usize,
     validity_offset: usize,
     col_offset: usize,
@@ -392,49 +434,87 @@ unsafe fn row_match_column_type<T: ArgType>(
     let mut match_count = 0;
 
     let mut equal: bool;
-
     if let Some(validity) = validity {
-        for i in 0..*count {
-            let idx = select_index.get_index(i);
-            let isnull = !validity.get_bit(idx);
-
+        let is_all_set = validity.unset_bits() == 0;
+        for idx in select_vector[..*count].iter() {
+            let idx = *idx;
             let validity_address = address[idx].add(validity_offset);
-            let isnull2 = load::<u8>(validity_address) != 0;
-
-            equal = isnull == isnull2;
-            if !isnull && !isnull2 {
+            let is_set2 = read::<u8>(validity_address as _) != 0;
+            let is_set = is_all_set || validity.get_bit_unchecked(idx);
+            if is_set && is_set2 {
                 let address = address[idx].add(col_offset);
-                let scalar = load::<<T as ValueType>::Scalar>(address);
+                let scalar = read::<<T as ValueType>::Scalar>(address as _);
                 let value = T::index_column_unchecked(&col, idx);
                 let value = T::to_owned_scalar(value);
+
                 equal = scalar.eq(&value);
+            } else {
+                equal = is_set == is_set2;
             }
 
             if equal {
-                select_index.set_index(match_count, idx);
+                temp_vector[match_count] = idx;
                 match_count += 1;
             } else {
-                no_match.set_index(*no_match_count, idx);
+                no_match[*no_match_count] = idx;
                 *no_match_count += 1;
             }
         }
     } else {
-        for i in 0..*count {
-            let idx = select_index.get_index(i);
+        for idx in select_vector[..*count].iter() {
+            let idx = *idx;
             let value = T::index_column_unchecked(&col, idx);
             let address = address[idx].add(col_offset);
-            let scalar = load::<<T as ValueType>::Scalar>(address);
+            let scalar = read::<<T as ValueType>::Scalar>(address as _);
             let value = T::to_owned_scalar(value);
 
             if scalar.eq(&value) {
-                select_index.set_index(match_count, idx);
+                temp_vector[match_count] = idx;
                 match_count += 1;
             } else {
-                no_match.set_index(*no_match_count, idx);
+                no_match[*no_match_count] = idx;
                 *no_match_count += 1;
             }
         }
     }
 
+    select_vector.clone_from_slice(temp_vector);
+    *count = match_count;
+}
+
+unsafe fn row_match_generic_column(
+    col: &Column,
+    address: &[*const u8],
+    select_vector: &mut SelectVector,
+    temp_vector: &mut SelectVector,
+    count: &mut usize,
+    col_offset: usize,
+    no_match: &mut SelectVector,
+    no_match_count: &mut usize,
+) {
+    let mut match_count = 0;
+
+    for idx in select_vector[..*count].iter() {
+        let idx = *idx;
+        let len_address = address[idx].add(col_offset);
+        let len = read::<u32>(len_address as _) as usize;
+
+        let address = address[idx].add(col_offset + 4);
+
+        let value = AnyType::index_column_unchecked(col, idx);
+        let data_address = read::<u64>(address as _) as usize as *const u8;
+
+        let scalar = std::slice::from_raw_parts(data_address, len);
+        let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
+
+        if scalar.as_ref() == value {
+            temp_vector[match_count] = idx;
+            match_count += 1;
+        } else {
+            no_match[*no_match_count] = idx;
+            *no_match_count += 1;
+        }
+    }
+    select_vector.clone_from_slice(temp_vector);
     *count = match_count;
 }

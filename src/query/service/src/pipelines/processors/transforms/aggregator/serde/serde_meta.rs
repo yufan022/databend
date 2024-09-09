@@ -29,6 +29,8 @@ pub struct AggregateSerdeMeta {
     pub location: Option<String>,
     pub data_range: Option<Range<u64>>,
     pub columns_layout: Vec<usize>,
+    // use for new agg hashtable
+    pub max_partition_count: usize,
 }
 
 impl AggregateSerdeMeta {
@@ -39,6 +41,18 @@ impl AggregateSerdeMeta {
             location: None,
             data_range: None,
             columns_layout: vec![],
+            max_partition_count: 0,
+        })
+    }
+
+    pub fn create_agg_payload(bucket: isize, max_partition_count: usize) -> BlockMetaInfoPtr {
+        Box::new(AggregateSerdeMeta {
+            typ: BUCKET_TYPE,
+            bucket,
+            location: None,
+            data_range: None,
+            columns_layout: vec![],
+            max_partition_count,
         })
     }
 
@@ -54,6 +68,24 @@ impl AggregateSerdeMeta {
             columns_layout,
             location: Some(location),
             data_range: Some(data_range),
+            max_partition_count: 0,
+        })
+    }
+
+    pub fn create_agg_spilled(
+        bucket: isize,
+        location: String,
+        data_range: Range<u64>,
+        columns_layout: Vec<usize>,
+        max_partition_count: usize,
+    ) -> BlockMetaInfoPtr {
+        Box::new(AggregateSerdeMeta {
+            typ: SPILLED_TYPE,
+            bucket,
+            columns_layout,
+            location: Some(location),
+            data_range: Some(data_range),
+            max_partition_count,
         })
     }
 }
