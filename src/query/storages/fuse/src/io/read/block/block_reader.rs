@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-
 use databend_common_arrow::arrow::datatypes::Field;
 use databend_common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use databend_common_arrow::arrow::io::parquet::write::to_parquet_schema_with_options;
@@ -25,7 +24,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
