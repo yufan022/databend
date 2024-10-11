@@ -101,7 +101,7 @@ impl BlockReader {
         }
 
         // fallback to arrow rs reader for new version
-        let use_v2 = is_possible_non_standard_decimal_block(block_path)?
+        let use_v2 = !is_possible_non_standard_decimal_block(block_path)?
             && self
                 .project_column_nodes
                 .iter()
