@@ -37,6 +37,7 @@ pub use statistics::*;
 // export legacy versioned table meta types locally,
 // currently, used by versioned readers only
 pub(crate) use testing::*;
+pub use utils::is_possible_non_standard_decimal_block;
 pub(crate) use utils::*;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;
