@@ -149,6 +149,8 @@ pub struct QueryLogConfig {
     pub on: bool,
     pub dir: String,
     pub otlp: Option<OTLPEndpointConfig>,
+    pub kafka: Option<KafkaEndpointConfig>,
+    pub filter_trivial: bool,
 }
 
 impl Display for QueryLogConfig {
@@ -156,6 +158,12 @@ impl Display for QueryLogConfig {
         write!(f, "enabled={}, dir={}", self.on, self.dir)?;
         if let Some(endpoint) = &self.otlp {
             write!(f, ", otlp={}", endpoint)?;
+        }
+        if let Some(kafka) = &self.kafka {
+            write!(f, ", kafka={}", kafka)?;
+        }
+        if self.filter_trivial {
+            write!(f, ", filter_trivial=true")?;
         }
         Ok(())
     }
@@ -167,6 +175,8 @@ impl Default for QueryLogConfig {
             on: false,
             dir: "".to_string(),
             otlp: None,
+            kafka: None,
+            filter_trivial: false,
         }
     }
 }
@@ -322,5 +332,17 @@ impl Default for OTLPEndpointConfig {
             protocol: OTLPProtocol::Grpc,
             labels: BTreeMap::new(),
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct KafkaEndpointConfig {
+    pub brokers: String,
+    pub topic: String,
+}
+
+impl Display for KafkaEndpointConfig {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "[brokers={}, topic={}]", self.brokers, self.topic)
     }
 }

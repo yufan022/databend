@@ -66,6 +66,15 @@ fn error_fields(log_type: LogType, err: Option<ErrorCode>) -> (LogType, i32, Str
 impl InterpreterQueryLog {
     fn write_log(event: QueryLogElement) -> Result<()> {
         let event_str = serde_json::to_string(&event)?;
+        // optionally filter trivial queries
+        if databend_common_config::GlobalConfig::instance().log.query.filter_trivial {
+            let text = event.query_text.trim().to_lowercase();
+            let is_select_1 = text == "select 1" || text == "select 1;";
+            let is_select_1_from_dual = text == "select 1 from dual" || text == "select 1 from dual;";
+            if is_select_1 || is_select_1_from_dual {
+                return Ok(());
+            }
+        }
         // log the query log in JSON format
         info!(target: "databend::log::query", "{}", event_str);
         // log the query event in the system log

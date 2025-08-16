@@ -234,6 +234,10 @@ pub fn init_logging(
             let logger = OpenTelemetryLogger::new(log_name, "query", endpoint, &labels);
             query_logger = query_logger.chain(Box::new(logger) as Box<dyn Log>);
         }
+        if let Some(kafka) = &cfg.query.kafka {
+            let logger = crate::loggers::KafkaLogger::new(kafka);
+            query_logger = query_logger.chain(Box::new(logger) as Box<dyn Log>);
+        }
     }
 
     // Profile logger

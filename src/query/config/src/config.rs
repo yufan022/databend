@@ -2223,6 +2223,23 @@ pub struct QueryLogConfig {
     #[clap(skip)]
     #[serde(flatten, with = "prefix_otlp")]
     pub log_query_otlp: Option<OTLPEndpointConfig>,
+
+    /// Query Log Kafka brokers, e.g. localhost:9092
+    #[clap(long = "log-query-kafka-brokers", value_name = "VALUE", default_value = "")]
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub log_query_kafka_brokers: String,
+
+    /// Query Log Kafka topic
+    #[clap(long = "log-query-kafka-topic", value_name = "VALUE", default_value = "")]
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub log_query_kafka_topic: String,
+
+    /// Whether to filter trivial queries like `select 1` or `select 1 from dual`
+    #[clap(
+        long = "log-query-filter-trivial", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(skip_serializing_if = "std::ops::Not::not", default = "default_false")]
+    pub log_query_filter_trivial: bool,
 }
 
 impl Default for QueryLogConfig {
@@ -2235,10 +2252,22 @@ impl TryInto<InnerQueryLogConfig> for QueryLogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerQueryLogConfig> {
+        let kafka = if !self.log_query_kafka_brokers.is_empty()
+            && !self.log_query_kafka_topic.is_empty()
+        {
+            Some(databend_common_tracing::KafkaEndpointConfig {
+                brokers: self.log_query_kafka_brokers,
+                topic: self.log_query_kafka_topic,
+            })
+        } else {
+            None
+        };
         Ok(InnerQueryLogConfig {
             on: self.log_query_on,
             dir: self.log_query_dir,
             otlp: self.log_query_otlp.map(|cfg| cfg.try_into()).transpose()?,
+            kafka,
+            filter_trivial: self.log_query_filter_trivial,
         })
     }
 }
@@ -2249,6 +2278,9 @@ impl From<InnerQueryLogConfig> for QueryLogConfig {
             log_query_on: inner.on,
             log_query_dir: inner.dir,
             log_query_otlp: inner.otlp.map(|cfg| cfg.into()),
+            log_query_kafka_brokers: inner.kafka.as_ref().map(|k| k.brokers.clone()).unwrap_or_default(),
+            log_query_kafka_topic: inner.kafka.as_ref().map(|k| k.topic.clone()).unwrap_or_default(),
+            log_query_filter_trivial: inner.filter_trivial,
         }
     }
 }

@@ -34,6 +34,7 @@ use tracing_appender::rolling::Rotation;
 
 use crate::config::OTLPEndpointConfig;
 use crate::config::OTLPProtocol;
+use crate::config::KafkaEndpointConfig;
 
 /// Create a `BufWriter<NonBlocking>` for a rolling file logger.
 ///
@@ -200,14 +201,47 @@ impl log::Log for OpenTelemetryLogger {
         }
     }
 
-    fn flush(&self) {
-        let result = self.provider.force_flush();
-        for r in result {
-            if let Err(e) = r {
-                eprintln!("flush logger {}:{} failed: {}", self.name, self.category, e);
-            }
+    fn flush(&self) {}
+}
+
+#[derive(Clone)]
+pub(crate) struct KafkaLogger {
+    producer: Arc<rdkafka::producer::FutureProducer>,
+    topic: String,
+}
+
+impl KafkaLogger {
+    pub fn new(cfg: &KafkaEndpointConfig) -> Self {
+        let mut client_config = rdkafka::ClientConfig::new();
+        client_config.set("bootstrap.servers", cfg.brokers.as_str());
+        let producer: rdkafka::producer::FutureProducer = client_config
+            .create()
+            .expect("failed to create kafka producer");
+        Self {
+            producer: Arc::new(producer),
+            topic: cfg.topic.clone(),
         }
     }
+}
+
+impl log::Log for KafkaLogger {
+    fn enabled(&self, _metadata: &log::Metadata<'_>) -> bool {
+        true
+    }
+
+    fn log(&self, record: &log::Record<'_>) {
+        // send raw message body (already JSON for query logs)
+        let payload = record.args().to_string();
+        let topic = self.topic.clone();
+        let producer = self.producer.clone();
+        // fire and forget
+        let _ = producer.send(
+            rdkafka::producer::FutureRecord::to(&topic).payload(&payload),
+            Duration::from_secs(0),
+        );
+    }
+
+    fn flush(&self) {}
 }
 
 pub fn formatter(
