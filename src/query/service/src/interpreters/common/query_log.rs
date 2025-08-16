@@ -64,22 +64,22 @@ fn error_fields<C>(log_type: LogType, err: Option<ErrorCode<C>>) -> (LogType, i3
 }
 
 impl InterpreterQueryLog {
-    fn write_log(mut event: QueryLogElement) -> Result<()> {
-        // log the query event in the system_history.query_history table
+    fn write_log(event: QueryLogElement) -> Result<()> {
         let event_str = serde_json::to_string(&event)?;
+        // optionally filter trivial queries
+        if databend_common_config::GlobalConfig::instance().log.query.filter_trivial {
+            let text = event.query_text.trim().to_lowercase();
+            let is_select_1 = text == "select 1" || text == "select 1;";
+            let is_select_1_from_dual = text == "select 1 from dual" || text == "select 1 from dual;";
+            if is_select_1 || is_select_1_from_dual {
+                return Ok(());
+            }
+        }
+        // log the query log in JSON format
         info!(target: "databend::log::query", "{}", event_str);
-
-        // log the query event in `query-details` log file
-        // remove some fields to keep tidy in the log file
-        event.session_settings.clear();
-        event.sql_user_quota.clear();
-        event.sql_user_privileges.clear();
-        let event_str = serde_json::to_string(&event)?;
-        info!(target: "databend::log::query::file", "{}", event_str);
-
         // log the query event in the system log
         info!("query: {} becomes {:?}", event.query_id, event.log_type);
-        Ok(())
+        QueryLogQueue::instance()?.append_data(event)
     }
 
     pub fn fail_to_start(ctx: Arc<QueryContext>, err: ErrorCode) {
